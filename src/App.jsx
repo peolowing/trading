@@ -199,15 +199,14 @@ export default function App() {
             </div>
             <ul className="screener-list">
               {screenerData.slice(0, 10).map((item, idx) => {
-                // Calculate simple ranking based on regime and RSI
-                const isBullish = item.regime === "Bullish Trend";
-                const hasSetup = item.setup && item.setup !== "Hold";
+                // Calculate color based on edge score
+                const edgeScore = item.edgeScore || 5;
                 let colorClass = "red";
-                if (isBullish && hasSetup) colorClass = "green";
-                else if (isBullish || hasSetup) colorClass = "yellow";
+                if (edgeScore >= 7) colorClass = "green";
+                else if (edgeScore >= 5) colorClass = "yellow";
 
-                // Calculate a score value (0-100 based on RSI)
-                const scoreValue = item.rsi?.toFixed(0) || "N/A";
+                // Display edge score value
+                const scoreValue = item.edgeScore?.toFixed(1) || "N/A";
 
                 return (
                   <li key={item.ticker} className="screener-row">
@@ -220,7 +219,7 @@ export default function App() {
                     </button>
                     <span className={`score ${colorClass}`}>{scoreValue}</span>
                     <span className="meta">
-                      {item.regime === "Bullish Trend" ? "↑" : item.regime === "Bearish Trend" ? "↓" : "→"} {item.setup || "Hold"}
+                      {item.regime === "Bullish Trend" ? "↑" : item.regime === "Bearish Trend" ? "↓" : "→"} RSI {item.rsi?.toFixed(0) || "N/A"}
                     </span>
                   </li>
                 );

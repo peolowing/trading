@@ -761,6 +761,18 @@ app.get("/api/screener", async (req, res) => {
             low: lows[lows.length - 1]
           });
 
+          // Calculate edge score (0-10 scale)
+          let edgeScore = 5;
+          if (regime === "Bullish Trend") edgeScore += 2;
+          else if (regime === "Bearish Trend") edgeScore -= 2;
+          if (lastRsi >= 40 && lastRsi <= 60) edgeScore += 1;
+          if (lastRsi < 30 || lastRsi > 70) edgeScore -= 1;
+          if (relativeVolume > 1.5) edgeScore += 1;
+          if (relativeVolume < 0.8) edgeScore -= 0.5;
+          if (setup !== "Hold") edgeScore += 0.5;
+
+          const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+
           // Skip AI analysis in screener for performance
           // AI analysis will be loaded when user selects a specific stock
           return {
@@ -772,7 +784,8 @@ app.get("/api/screener", async (req, res) => {
             atr: lastAtr,
             relativeVolume,
             regime,
-            setup
+            setup,
+            edgeScore: finalEdgeScore
           };
         } catch (error) {
           console.error(`Error processing ${ticker}:`, error);

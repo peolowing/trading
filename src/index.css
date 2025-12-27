@@ -290,12 +290,17 @@ button {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #4f46e5;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  display: inline-block;
   width: 100%;
+}
+
+/* Gradient text effect for browsers that support it */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .ai-heading {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 }
 
 .ai-heading:first-child {

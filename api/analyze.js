@@ -1,6 +1,18 @@
 import yahooFinance from 'yahoo-finance2';
 import { EMA, RSI, ATR } from 'technicalindicators';
 import dayjs from 'dayjs';
+import { createClient } from '@supabase/supabase-js';
+
+// In-memory cache (fallback when DB cache unavailable)
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Supabase for persistent cache
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = (supabaseUrl && supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
 
 function alignSeries(series, totalLength) {
   const padding = totalLength - series.length;
@@ -47,8 +59,46 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing ticker" });
     }
 
-    // Fetch candles from Yahoo Finance
-    const startDate = dayjs().subtract(3, 'year').format('YYYY-MM-DD');
+    const today = dayjs().format('YYYY-MM-DD');
+    const cacheKey = `${ticker}-${today}`;
+
+    // Try Supabase cache first (persistent)
+    if (supabase) {
+      try {
+        const { data: dbCached } = await supabase
+          .from('indicators')
+          .select('candles, ema20_series, ema50_series, rsi14_series, atr14_series, indicators_data')
+          .eq('ticker', ticker)
+          .eq('date', today)
+          .maybeSingle();
+
+        if (dbCached && dbCached.candles) {
+          console.log(`[DB Cache HIT] ${ticker}`);
+          return res.json({
+            candles: dbCached.candles,
+            ema20: dbCached.ema20_series,
+            ema50: dbCached.ema50_series,
+            rsi14: dbCached.rsi14_series,
+            atr14: dbCached.atr14_series,
+            indicators: dbCached.indicators_data
+          });
+        }
+      } catch (e) {
+        console.warn(`[DB Cache] ${e.message}`);
+      }
+    }
+
+    // Fallback to in-memory cache
+    const memCached = cache.get(cacheKey);
+    if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+      console.log(`[Memory Cache HIT] ${ticker}`);
+      return res.json(memCached.data);
+    }
+
+    console.log(`[Cache MISS] ${ticker}`);
+
+    // Fetch candles from Yahoo Finance (1 year for calculations)
+    const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
     const rawCandles = await yahooFinance.chart(ticker, {
       period1: startDate,
       period2: dayjs().format('YYYY-MM-DD')
@@ -56,12 +106,12 @@ export default async function handler(req, res) {
 
     const candles = rawCandles.quotes.map(q => ({
       date: q.date.toISOString(),
-      open: q.open,
-      high: q.high,
-      low: q.low,
-      close: q.close,
+      open: Math.round(q.open * 100) / 100,
+      high: Math.round(q.high * 100) / 100,
+      low: Math.round(q.low * 100) / 100,
+      close: Math.round(q.close * 100) / 100,
       volume: q.volume,
-      adjClose: q.adjclose || q.close
+      adjClose: Math.round((q.adjclose || q.close) * 100) / 100
     }));
 
     if (candles.length < 50) {
@@ -132,17 +182,71 @@ export default async function handler(req, res) {
       setup
     };
 
-    res.json({
-      candles: candles.map(c => ({
+    // Only send last 6 months of candles to reduce response size
+    const sixMonthsAgo = dayjs().subtract(6, 'month').format('YYYY-MM-DD');
+    const recentCandles = candles.filter(c => c.date >= sixMonthsAgo);
+    const startIndex = candles.length - recentCandles.length;
+
+    const responseData = {
+      candles: recentCandles.map(c => ({
         ...c,
         date: String(c.date).slice(0, 10)
       })),
-      ema20,
-      ema50,
-      rsi14,
-      atr14,
+      ema20: ema20.slice(startIndex),
+      ema50: ema50.slice(startIndex),
+      rsi14: rsi14.slice(startIndex),
+      atr14: atr14.slice(startIndex),
       indicators
-    });
+    };
+
+    // Save to Supabase cache (persistent)
+    if (supabase) {
+      try {
+        await supabase
+          .from('indicators')
+          .upsert({
+            ticker,
+            date: today,
+            ema20: indicators.ema20,
+            ema50: indicators.ema50,
+            rsi14: indicators.rsi14,
+            atr14: indicators.atr14,
+            relative_volume: indicators.relativeVolume,
+            regime: indicators.regime,
+            setup: indicators.setup,
+            candles: responseData.candles,
+            ema20_series: responseData.ema20,
+            ema50_series: responseData.ema50,
+            rsi14_series: responseData.rsi14,
+            atr14_series: responseData.atr14,
+            indicators_data: indicators
+          }, { onConflict: 'ticker,date' });
+        console.log(`[DB Cache SAVED] ${ticker}`);
+      } catch (e) {
+        console.warn(`[DB Cache Save Failed] ${e.message}`);
+        // Fallback to in-memory cache
+        cache.set(cacheKey, {
+          data: responseData,
+          timestamp: Date.now()
+        });
+      }
+    } else {
+      // No database - use in-memory cache
+      cache.set(cacheKey, {
+        data: responseData,
+        timestamp: Date.now()
+      });
+    }
+
+    // Clean old in-memory cache entries (older than 1 hour)
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    for (const [key, value] of cache.entries()) {
+      if (value.timestamp < oneHourAgo) {
+        cache.delete(key);
+      }
+    }
+
+    res.json(responseData);
   } catch (error) {
     console.error("Error in /api/analyze:", error);
     res.status(500).json({ error: error.message });
