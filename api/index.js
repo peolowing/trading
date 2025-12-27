@@ -440,6 +440,10 @@ app.post("/api/analyze", async (req, res) => {
       return res.status(400).json({ error: "Missing candles data" });
     }
 
+    if (candles.length < 50) {
+      return res.status(400).json({ error: "Need at least 50 candles for analysis" });
+    }
+
     const closes = candles.map(c => c.close);
     const highs = candles.map(c => c.high);
     const lows = candles.map(c => c.low);
@@ -467,6 +471,11 @@ app.post("/api/analyze", async (req, res) => {
     const lastEma20 = ema20[ema20.length - 1];
     const lastEma50 = ema50[ema50.length - 1];
     const lastClose = closes[closes.length - 1];
+
+    if (!lastEma20 || !lastEma50 || !lastClose) {
+      console.error("Missing indicator values:", { lastEma20, lastEma50, lastClose, ema20Length: ema20.length, ema50Length: ema50.length });
+      return res.status(500).json({ error: "Failed to calculate indicators" });
+    }
 
     if (lastEma20 > lastEma50 && lastClose > lastEma20) {
       regime = "Bullish Trend";
