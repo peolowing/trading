@@ -720,119 +720,8 @@ app.get("/api/screener", async (req, res) => {
             low: lows[lows.length - 1]
           });
 
-          let cachedAI = await getAIAnalysis(ticker, today);
-          let aiAnalysis = cachedAI?.analysis_text;
-
-          if (!aiAnalysis) {
-            console.log(`Fetching fresh AI analysis for ${ticker}`);
-            const strategies = ["Pullback", "Breakout", "Reversal", "Trend Following"];
-            const backtestResults = await Promise.all(
-              strategies.map(async (strat) => {
-                let cached = await getBacktestResults(ticker, today, strat);
-                if (cached) {
-                  return {
-                    strategy: strat,
-                    totalSignals: cached.total_signals,
-                    wins: cached.wins,
-                    losses: cached.losses,
-                    winRate: cached.win_rate,
-                    avgWin: cached.avg_win,
-                    avgLoss: cached.avg_loss,
-                    totalReturn: cached.total_return,
-                    maxDrawdown: cached.max_drawdown,
-                    sharpeRatio: cached.sharpe_ratio,
-                    trades: cached.trades_data
-                  };
-                }
-
-                const result = runBacktest(candles, strat);
-                await saveBacktestResults(ticker, today, result);
-                return result;
-              })
-            );
-
-            const priceChange = ((candles[candles.length - 1].close - candles[candles.length - 2].close) / candles[candles.length - 2].close) * 100;
-
-            const completion = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                {
-                  role: "system",
-                  content: `Du är en erfaren swing trader som analyserar veckotrading-möjligheter.
-
-VIKTIGT: Svara ENDAST på svenska. All text ska vara på svenska.
-
-Ge ditt svar i exakt följande struktur på svenska:
-
-## MARKNADSLÄGE
-[2-3 meningar om trenden, nuvarande prisnivå och om aktien är i en uppåt-, nedåt- eller sidledes trend]
-
-## TEKNISKA SIGNALER
-• **RSI:** [Nuvarande RSI-värde och vad det betyder - överköpt/översålt/neutralt]
-• **EMAs:** [Relation mellan pris, EMA20 och EMA50 - är det bullish/bearish crossover?]
-• **Volym:** [Jämför senaste volymen med genomsnittet - stigande/fallande aktivitet]
-• **Volatilitet (ATR):** [Kommentera nuvarande volatilitet och vad det betyder för risk]
-
-## STRATEGI & RESONEMANG
-[Förklara VILKEN strategi som passar bäst för nuvarande setup och VARFÖR. Jämför resultaten från backtesten för de olika strategierna (Pullback, Breakout, Reversal, Trend Following) och förklara varför den ena är bättre än den andra i nuläget.]
-
-## HANDELSBESLUT
-**Rekommendation:** [KÖP / INVÄNTA / UNDVIK]
-**Motivering:** [1-2 meningar om varför detta beslut]
-**Entry-nivå:** [Konkret prisnivå för entry om setup finns]
-
-## RISK & POSITIONSSTORLEK
-**Stop Loss:** [Konkret stop loss-nivå baserat på ATR eller support/resistance]
-**Target:** [Konkret målpris baserat på risk/reward ratio]
-**Risk/Reward:** [Förhållande, t.ex. 1:2 eller 1:3]
-**Position Size:** [Förslag baserat på ATR och risk, t.ex. "Max 2-3% av portföljen med stopp på X kr"]
-
-## BACKTEST-INSIKTER
-[2-3 meningar om vad backtestet visar för de olika strategierna - vinstprocent, genomsnittlig vinst/förlust, antal signaler. Vilken strategi har fungerat bäst historiskt?]
-
-## SAMMANFATTNING
-[1-2 meningar med tydlig konklusion - finns setup eller inte, vad är nästa steg]`
-                },
-                {
-                  role: "user",
-                  content: `Analysera ${ticker}:
-
-Senaste stängning: ${candles[candles.length - 1].close.toFixed(2)} (${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%)
-
-Tekniska indikatorer:
-- EMA20: ${lastEma20?.toFixed(2) || 'N/A'}
-- EMA50: ${lastEma50?.toFixed(2) || 'N/A'}
-- RSI(14): ${lastRsi?.toFixed(2) || 'N/A'}
-- ATR(14): ${lastAtr?.toFixed(2) || 'N/A'}
-- Relativ volym: ${relativeVolume?.toFixed(2) || 'N/A'}
-- Regime: ${regime || 'N/A'}
-- Setup: ${setup || 'N/A'}
-
-Backtest-resultat (senaste 3 åren):
-${backtestResults.map(bt => `
-${bt.strategy}:
-- Signaler: ${bt.totalSignals}
-- Vinstprocent: ${bt.winRate.toFixed(1)}%
-- Genomsnittlig vinst: ${bt.avgWin.toFixed(0)} kr
-- Genomsnittlig förlust: ${bt.avgLoss.toFixed(0)} kr
-- Total avkastning: ${bt.totalReturn.toFixed(1)}%
-- Max drawdown: ${bt.maxDrawdown.toFixed(1)}%
-- Sharpe ratio: ${bt.sharpeRatio.toFixed(2)}
-`).join('\n')}
-
-Ge konkret trading-rekommendation baserat på nuläget.`
-                }
-              ],
-              temperature: 0.7,
-              max_tokens: 1500
-            });
-
-            aiAnalysis = completion.choices[0].message.content;
-            await saveAIAnalysis(ticker, today, aiAnalysis);
-          } else {
-            console.log(`AI analysis already exists for ${ticker} today, skipping save`);
-          }
-
+          // Skip AI analysis in screener for performance
+          // AI analysis will be loaded when user selects a specific stock
           return {
             ticker,
             price: lastClose,
@@ -842,8 +731,7 @@ Ge konkret trading-rekommendation baserat på nuläget.`
             atr: lastAtr,
             relativeVolume,
             regime,
-            setup,
-            aiAnalysis
+            setup
           };
         } catch (error) {
           console.error(`Error processing ${ticker}:`, error);
