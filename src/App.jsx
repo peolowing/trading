@@ -459,11 +459,20 @@ export default function App() {
           </div>
           <div className="ai-analysis">
             {ai?.split('\n').map((line, i) => {
-              if (line.startsWith('**') && line.endsWith('**')) {
+              // Handle ## markdown headings
+              if (line.startsWith('## ')) {
+                return <h3 key={i} className="ai-heading">{line.substring(3).trim()}</h3>;
+              }
+              // Handle **bold** headings (old format)
+              else if (line.startsWith('**') && line.endsWith('**')) {
                 return <h3 key={i} className="ai-heading">{line.replace(/\*\*/g, '')}</h3>;
-              } else if (line.startsWith('•')) {
-                return <li key={i} className="ai-bullet">{line.substring(1).trim()}</li>;
-              } else if (line.trim()) {
+              }
+              // Handle bullet points
+              else if (line.startsWith('•') || line.trim().startsWith('•')) {
+                return <li key={i} className="ai-bullet">{line.replace('•', '').trim()}</li>;
+              }
+              // Handle other text
+              else if (line.trim()) {
                 return <p key={i} className="ai-text">{line}</p>;
               }
               return null;
