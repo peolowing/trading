@@ -50,7 +50,7 @@ export default function App() {
     try {
       const res = await fetch("/api/screener");
       const data = await res.json();
-      setScreenerData(data);
+      setScreenerData(data.stocks || []);
     } catch (e) {
       console.error("Screener error:", e);
     } finally {
@@ -191,15 +191,18 @@ export default function App() {
         {screenerData && screenerData.length > 0 && (
           <>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px", fontSize: "12px" }}>
-              <span className="pill green">● 80+ Stark</span>
-              <span className="pill yellow">● 65-79 OK</span>
-              <span className="pill red">● &lt;65 Svag</span>
+              <span className="pill green">● Bullish + Setup</span>
+              <span className="pill yellow">● Bullish eller Setup</span>
+              <span className="pill red">● Ingen signal</span>
             </div>
             <ul className="screener-list">
               {screenerData.slice(0, 10).map((item, idx) => {
+                // Calculate simple ranking based on regime and RSI
+                const isBullish = item.regime === "Bullish Trend";
+                const hasSetup = item.setup && item.setup !== "Hold";
                 let colorClass = "red";
-                if (item.ranking >= 80) colorClass = "green";
-                else if (item.ranking >= 65) colorClass = "yellow";
+                if (isBullish && hasSetup) colorClass = "green";
+                else if (isBullish || hasSetup) colorClass = "yellow";
 
                 return (
                   <li key={item.ticker} className="screener-row">
@@ -210,9 +213,9 @@ export default function App() {
                     >
                       {item.ticker}
                     </button>
-                    <span className={`score ${colorClass}`}>{item.ranking}</span>
+                    <span className={`score ${colorClass}`}>{item.setup || "Hold"}</span>
                     <span className="meta">
-                      {item.features.regime === "UPTREND" ? "↑" : "↓"} RSI {item.features.rsi14.toFixed(0)}
+                      {item.regime === "Bullish Trend" ? "↑" : item.regime === "Bearish Trend" ? "↓" : "→"} RSI {item.rsi?.toFixed(0) || "N/A"}
                     </span>
                   </li>
                 );
