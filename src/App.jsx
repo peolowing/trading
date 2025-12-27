@@ -74,7 +74,11 @@ export default function App() {
       const { candles, ...analysis } = response;
       console.log(`Received ${candles.length} candles for ${selectedStock}`);
 
-      let ai = { analysis: "AI-analys inte tillgänglig (rate limit eller annat fel)" };
+      // Set data immediately - show charts and indicators
+      setData({ candles, analysis, ai: "Laddar AI-analys..." });
+      setLoading(false); // Show UI immediately!
+
+      // Load AI analysis in background (async, non-blocking)
       try {
         const aiResponse = await fetch("/api/ai-analysis", {
           method: "POST",
@@ -82,17 +86,18 @@ export default function App() {
           body: JSON.stringify({ ticker: selectedStock, candles, indicators: analysis.indicators })
         });
         if (aiResponse.ok) {
-          ai = await aiResponse.json();
+          const ai = await aiResponse.json();
+          setData(prev => ({ ...prev, ai: ai.analysis }));
+        } else {
+          setData(prev => ({ ...prev, ai: "AI-analys inte tillgänglig" }));
         }
       } catch (e) {
         console.warn("AI analysis unavailable:", e);
+        setData(prev => ({ ...prev, ai: "AI-analys inte tillgänglig (rate limit eller annat fel)" }));
       }
-
-      setData({ candles, analysis, ai: ai.analysis });
     } catch (e) {
       console.error(e);
       setError("Kunde inte ladda marknadsdata");
-    } finally {
       setLoading(false);
     }
   }
@@ -201,6 +206,9 @@ export default function App() {
                 if (isBullish && hasSetup) colorClass = "green";
                 else if (isBullish || hasSetup) colorClass = "yellow";
 
+                // Calculate a score value (0-100 based on RSI)
+                const scoreValue = item.rsi?.toFixed(0) || "N/A";
+
                 return (
                   <li key={item.ticker} className="screener-row">
                     <span className="rank">#{idx + 1}</span>
@@ -210,9 +218,9 @@ export default function App() {
                     >
                       {item.ticker}
                     </button>
-                    <span className={`score ${colorClass}`}>{item.setup || "Hold"}</span>
+                    <span className={`score ${colorClass}`}>{scoreValue}</span>
                     <span className="meta">
-                      {item.regime === "Bullish Trend" ? "↑" : item.regime === "Bearish Trend" ? "↓" : "→"} RSI {item.rsi?.toFixed(0) || "N/A"}
+                      {item.regime === "Bullish Trend" ? "↑" : item.regime === "Bearish Trend" ? "↓" : "→"} {item.setup || "Hold"}
                     </span>
                   </li>
                 );
