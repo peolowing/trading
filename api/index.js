@@ -483,14 +483,9 @@ app.post("/api/analyze", async (req, res) => {
       regime = "Bearish Trend";
     }
 
-    const indicators = {
-      ema20: lastEma20,
-      ema50: lastEma50,
-      rsi14: rsi14[rsi14.length - 1],
-      atr14: atr14[atr14.length - 1],
-      relativeVolume,
-      regime,
-      setup: detectStrategy({
+    let setup = "Hold";
+    try {
+      setup = detectStrategy({
         ema20: lastEma20,
         ema50: lastEma50,
         rsi14: rsi14[rsi14.length - 1],
@@ -499,7 +494,19 @@ app.post("/api/analyze", async (req, res) => {
         close: lastClose,
         high: highs[highs.length - 1],
         low: lows[lows.length - 1]
-      })
+      });
+    } catch (e) {
+      console.error("detectStrategy error:", e);
+    }
+
+    const indicators = {
+      ema20: lastEma20,
+      ema50: lastEma50,
+      rsi14: rsi14[rsi14.length - 1],
+      atr14: atr14[atr14.length - 1],
+      relativeVolume,
+      regime,
+      setup
     };
 
     res.json({
