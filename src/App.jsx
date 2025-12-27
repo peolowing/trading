@@ -63,19 +63,16 @@ export default function App() {
     setError("");
     try {
       console.log(`Loading data for ${selectedStock}...`);
-      const raw = await fetch(`/api/market-data?ticker=${selectedStock}`).then(r => r.json());
-      console.log(`Received ${raw.length} candles for ${selectedStock}`);
-      const candles = raw.map(c => ({
-        ...c,
-        ticker: selectedStock,
-        date: String(c.date).slice(0, 10)
-      }));
 
-      const analysis = await fetch("/api/analyze", {
+      // Get analysis with candles and indicators in one call
+      const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ candles })
+        body: JSON.stringify({ ticker: selectedStock })
       }).then(r => r.json());
+
+      const { candles, ...analysis } = response;
+      console.log(`Received ${candles.length} candles for ${selectedStock}`);
 
       let ai = { analysis: "AI-analys inte tillgänglig (rate limit eller annat fel)" };
       try {

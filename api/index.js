@@ -435,7 +435,28 @@ app.get("/api/market-data", async (req, res) => {
 
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { candles } = req.body;
+    const { ticker, candles: providedCandles } = req.body;
+
+    // If ticker is provided, fetch candles from Yahoo Finance
+    let candles = providedCandles;
+    if (ticker && !providedCandles) {
+      const startDate = dayjs().subtract(3, 'year').format('YYYY-MM-DD');
+      const rawCandles = await yahooFinance.chart(ticker, {
+        period1: startDate,
+        period2: dayjs().format('YYYY-MM-DD')
+      });
+
+      candles = rawCandles.quotes.map(q => ({
+        date: q.date.toISOString(),
+        open: q.open,
+        high: q.high,
+        low: q.low,
+        close: q.close,
+        volume: q.volume,
+        adjClose: q.adjclose || q.close
+      }));
+    }
+
     if (!candles || candles.length === 0) {
       return res.status(400).json({ error: "Missing candles data" });
     }
@@ -510,6 +531,10 @@ app.post("/api/analyze", async (req, res) => {
     };
 
     res.json({
+      candles: candles.map(c => ({
+        ...c,
+        date: String(c.date).slice(0, 10)
+      })),
       ema20,
       ema50,
       rsi14,
