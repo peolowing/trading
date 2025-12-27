@@ -19,7 +19,7 @@ export default function ScreenerAdmin({ onNavigate }) {
     try {
       const res = await fetch("/api/screener/stocks");
       const data = await res.json();
-      setStocks(data);
+      setStocks(data.stocks || []);
     } catch (e) {
       console.error("Failed to load screener stocks:", e);
     } finally {
