@@ -443,20 +443,19 @@ app.post("/api/analyze", async (req, res) => {
     // Check if we have cached indicators for today
     if (ticker && supabase) {
       const today = dayjs().format('YYYY-MM-DD');
-      const { data: cachedIndicators } = await supabase
+      const { data: cachedIndicators, error: cacheError } = await supabase
         .from('indicators')
         .select('*')
         .eq('ticker', ticker)
         .eq('date', today)
-        .single();
+        .maybeSingle();
 
       if (cachedIndicators) {
         console.log(`Using cached indicators for ${ticker}`);
-        // Reconstruct the full arrays (we only cache the last values, so recalculate for chart)
+        // Still need to calculate arrays for the chart display
         const closes = candles.map(c => c.close);
         const highs = candles.map(c => c.high);
         const lows = candles.map(c => c.low);
-        const volumes = candles.map(c => c.volume);
 
         const ema20Result = EMA.calculate({ period: 20, values: closes });
         const ema50Result = EMA.calculate({ period: 50, values: closes });
