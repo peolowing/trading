@@ -74,7 +74,7 @@ export default function App() {
       const analysis = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(candles)
+        body: JSON.stringify({ candles, ticker: selectedStock })
       }).then(r => r.json());
 
       let ai = { analysis: "AI-analys inte tillgänglig (rate limit eller annat fel)" };

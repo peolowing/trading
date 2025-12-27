@@ -435,11 +435,58 @@ app.get("/api/market-data", async (req, res) => {
 
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { candles } = req.body;
+    const { candles, ticker } = req.body;
     if (!candles || candles.length === 0) {
       return res.status(400).json({ error: "Missing candles data" });
     }
 
+    // Check if we have cached indicators for today
+    if (ticker && supabase) {
+      const today = dayjs().format('YYYY-MM-DD');
+      const { data: cachedIndicators } = await supabase
+        .from('indicators')
+        .select('*')
+        .eq('ticker', ticker)
+        .eq('date', today)
+        .single();
+
+      if (cachedIndicators) {
+        console.log(`Using cached indicators for ${ticker}`);
+        // Reconstruct the full arrays (we only cache the last values, so recalculate for chart)
+        const closes = candles.map(c => c.close);
+        const highs = candles.map(c => c.high);
+        const lows = candles.map(c => c.low);
+        const volumes = candles.map(c => c.volume);
+
+        const ema20Result = EMA.calculate({ period: 20, values: closes });
+        const ema50Result = EMA.calculate({ period: 50, values: closes });
+        const rsi14Result = RSI.calculate({ period: 14, values: closes });
+        const atr14Result = ATR.calculate({
+          high: highs,
+          low: lows,
+          close: closes,
+          period: 14
+        });
+
+        return res.json({
+          ema20: alignSeries(ema20Result, closes.length),
+          ema50: alignSeries(ema50Result, closes.length),
+          rsi14: alignSeries(rsi14Result, closes.length),
+          atr14: alignSeries(atr14Result, closes.length),
+          indicators: {
+            ema20: cachedIndicators.ema20,
+            ema50: cachedIndicators.ema50,
+            rsi14: cachedIndicators.rsi14,
+            atr14: cachedIndicators.atr14,
+            relativeVolume: cachedIndicators.relative_volume,
+            regime: cachedIndicators.regime,
+            setup: cachedIndicators.setup
+          }
+        });
+      }
+    }
+
+    console.log(`Calculating fresh indicators for ${ticker || 'unknown'}`);
     const closes = candles.map(c => c.close);
     const highs = candles.map(c => c.high);
     const lows = candles.map(c => c.low);
@@ -474,6 +521,17 @@ app.post("/api/analyze", async (req, res) => {
       regime = "Bearish Trend";
     }
 
+    const setup = detectStrategy({
+      ema20: lastEma20,
+      ema50: lastEma50,
+      rsi14: rsi14[rsi14.length - 1],
+      relativeVolume,
+      regime,
+      close: lastClose,
+      high: highs[highs.length - 1],
+      low: lows[lows.length - 1]
+    });
+
     const indicators = {
       ema20: lastEma20,
       ema50: lastEma50,
@@ -481,17 +539,13 @@ app.post("/api/analyze", async (req, res) => {
       atr14: atr14[atr14.length - 1],
       relativeVolume,
       regime,
-      setup: detectStrategy({
-        ema20: lastEma20,
-        ema50: lastEma50,
-        rsi14: rsi14[rsi14.length - 1],
-        relativeVolume,
-        regime,
-        close: lastClose,
-        high: highs[highs.length - 1],
-        low: lows[lows.length - 1]
-      })
+      setup
     };
+
+    // Save indicators to cache
+    if (ticker) {
+      await saveIndicators(ticker, dayjs().format('YYYY-MM-DD'), indicators);
+    }
 
     res.json({
       ema20,
