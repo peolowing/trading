@@ -460,30 +460,70 @@ export default function PositionDetail({ ticker, onBack }) {
 
         <div style={{
           display: "flex",
-          gap: "8px",
+          gap: "12px",
           width: "100%",
           flexWrap: "wrap"
         }}>
           <button
-            className="ghost"
             onClick={onBack}
-            style={{ flex: "1 1 auto", minWidth: "120px" }}
+            style={{
+              flex: "1 1 auto",
+              minWidth: "140px",
+              padding: "12px 20px",
+              background: "#ffffff",
+              border: "2px solid #e2e8f0",
+              borderRadius: "8px",
+              fontSize: "14px",
+              fontWeight: "600",
+              color: "#0f172a",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#f8fafc";
+              e.target.style.borderColor = "#cbd5e1";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "#ffffff";
+              e.target.style.borderColor = "#e2e8f0";
+            }}
           >
-            ← Dashboard
+            <span style={{ fontSize: "16px" }}>←</span>
+            <span>Dashboard</span>
           </button>
           {!isExited && (
             <button
-              className="ghost"
               style={{
-                background: "#dc2626",
-                color: "white",
-                borderColor: "#dc2626",
                 flex: "1 1 auto",
-                minWidth: "120px"
+                minWidth: "140px",
+                padding: "12px 20px",
+                background: showExitForm ? "#64748b" : "#dc2626",
+                border: "2px solid " + (showExitForm ? "#64748b" : "#dc2626"),
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "600",
+                color: "white",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px"
               }}
               onClick={() => setShowExitForm(!showExitForm)}
+              onMouseEnter={(e) => {
+                e.target.style.background = showExitForm ? "#475569" : "#b91c1c";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = showExitForm ? "#64748b" : "#dc2626";
+              }}
             >
-              {showExitForm ? "Stäng Exit" : "Exit Position"}
+              <span style={{ fontSize: "16px" }}>{showExitForm ? "✕" : "⬆"}</span>
+              <span>{showExitForm ? "Stäng Exit" : "Exit Position"}</span>
             </button>
           )}
         </div>
