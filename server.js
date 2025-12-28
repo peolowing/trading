@@ -7,6 +7,14 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
 import { updateWatchlistStatus, buildWatchlistInput } from "./lib/watchlistLogic.js";
+import {
+  portfolioRepo,
+  eventsRepo,
+  watchlistRepo,
+  backtestRepo,
+  marketdataRepo,
+  screenerRepo
+} from "./repositories/index.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -67,52 +75,26 @@ function detectStrategy(indicators) {
 
 // Helper: Get backtest results from Supabase
 async function getBacktestResults(ticker, date, strategy) {
-  if (!supabase) return null;
-  try {
-    const { data, error } = await supabase
-      .from('backtest_results')
-      .select('*')
-      .eq('ticker', ticker)
-      .eq('analysis_date', date)
-      .eq('strategy', strategy)
-      .maybeSingle();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      console.error("Supabase backtest_results error:", error);
-      return null;
-    }
-
-    return data;
-  } catch (e) {
-    console.error("getBacktestResults error:", e);
-    return null;
-  }
+  return backtestRepo.findByTickerDateStrategy(ticker, date, strategy);
 }
 
 // Helper: Save backtest results to Supabase
 async function saveBacktestResults(ticker, date, results) {
-  if (!supabase) return;
+  if (!backtestRepo.hasDatabase()) return;
   try {
-    const { error } = await supabase
-      .from('backtest_results')
-      .upsert({
-        ticker,
-        analysis_date: date,
-        strategy: results.strategy,
-        total_signals: results.totalSignals,
-        wins: results.wins,
-        losses: results.losses,
-        win_rate: results.winRate,
-        avg_win: results.avgWin,
-        avg_loss: results.avgLoss,
-        total_return: results.totalReturn,
-        max_drawdown: results.maxDrawdown,
-        sharpe_ratio: results.sharpeRatio,
-        trades_data: results.trades
-      }, { onConflict: 'ticker,analysis_date,strategy' });
-
-    if (error) console.error("Supabase backtest_results error:", error);
+    await backtestRepo.upsert(ticker, date, {
+      strategy: results.strategy,
+      total_signals: results.totalSignals,
+      wins: results.wins,
+      losses: results.losses,
+      win_rate: results.winRate,
+      avg_win: results.avgWin,
+      avg_loss: results.avgLoss,
+      total_return: results.totalReturn,
+      max_drawdown: results.maxDrawdown,
+      sharpe_ratio: results.sharpeRatio,
+      trades_data: results.trades
+    });
   } catch (e) {
     console.error("saveBacktestResults error:", e);
   }
@@ -120,23 +102,9 @@ async function saveBacktestResults(ticker, date, results) {
 
 // Helper: Spara marknadsdata till Supabase
 async function saveMarketData(ticker, candles) {
-  if (!supabase) return;
+  if (!marketdataRepo.hasDatabase()) return;
   try {
-    const records = candles.map(c => ({
-      ticker,
-      date: c.date,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-      volume: c.volume
-    }));
-
-    const { error } = await supabase
-      .from('market_data')
-      .upsert(records, { onConflict: 'ticker,date' });
-
-    if (error) console.error("Supabase market_data error:", error);
+    await marketdataRepo.saveCandles(ticker, candles);
   } catch (e) {
     console.error("saveMarketData error:", e);
   }
@@ -144,21 +112,8 @@ async function saveMarketData(ticker, candles) {
 
 // Helper: Hämta marknadsdata från Supabase
 async function getMarketData(ticker, startDate) {
-  if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('market_data')
-      .select('*')
-      .eq('ticker', ticker)
-      .gte('date', startDate)
-      .order('date', { ascending: true });
-
-    if (error) {
-      console.error("Supabase getMarketData error:", error);
-      return null;
-    }
-
-    return data;
+    return await marketdataRepo.findByTickerFromDate(ticker, startDate);
   } catch (e) {
     console.error("getMarketData error:", e);
     return null;
@@ -848,14 +803,10 @@ app.get("/api/screener", async (req, res) => {
     // Get dynamic stock list from database, fallback to hardcoded list
     let stockList = UNIVERSE_SE;
 
-    if (supabase) {
+    if (screenerRepo.hasDatabase()) {
       try {
-        const { data: dbStocks, error } = await supabase
-          .from('screener_stocks')
-          .select('ticker')
-          .eq('is_active', true);
-
-        if (!error && dbStocks && dbStocks.length > 0) {
+        const dbStocks = await screenerRepo.findAllActive();
+        if (dbStocks && dbStocks.length > 0) {
           stockList = dbStocks.map(s => s.ticker);
           console.log(`Using ${stockList.length} stocks from database`);
         } else {
@@ -1236,18 +1187,13 @@ app.delete("/api/trades/:id", async (req, res) => {
 
 // GET /api/watchlist - Hämta bevakningslistan
 app.get("/api/watchlist", async (req, res) => {
-  if (!supabase) {
+  if (!watchlistRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
-    const { data, error } = await supabase
-      .from('watchlist')
-      .select('*')
-      .order('added_at', { ascending: false });
-
-    if (error) throw error;
-    res.json({ stocks: data || [] });
+    const stocks = await watchlistRepo.findAll();
+    res.json({ stocks });
   } catch (e) {
     console.error("Get watchlist error:", e);
     res.status(500).json({ error: "Failed to fetch watchlist" });
@@ -1502,28 +1448,22 @@ app.post("/api/watchlist/update", async (req, res) => {
 
 // GET /api/portfolio - Hämta förvaltningslistan
 app.get("/api/portfolio", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker } = req.query;
 
-    let query = supabase
-      .from('portfolio')
-      .select('*');
-
-    // If ticker is specified, filter by it
+    let stocks;
     if (ticker) {
-      query = query.eq('ticker', ticker);
+      const stock = await portfolioRepo.findByTicker(ticker);
+      stocks = stock ? [stock] : [];
     } else {
-      query = query.order('added_at', { ascending: false });
+      stocks = await portfolioRepo.findAllActive();
     }
 
-    const { data, error } = await query;
-
-    if (error) throw error;
-    res.json({ stocks: data || [] });
+    res.json({ stocks });
   } catch (e) {
     console.error("Get portfolio error:", e);
     res.status(500).json({ error: "Failed to fetch portfolio" });
@@ -1532,47 +1472,39 @@ app.get("/api/portfolio", async (req, res) => {
 
 // POST /api/portfolio - Lägg till i förvaltningslistan
 app.post("/api/portfolio", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker, entry_price, quantity } = req.body;
 
-    const { data, error } = await supabase
-      .from('portfolio')
-      .insert({ ticker, entry_price, quantity })
-      .select();
-
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(409).json({ error: "Already in portfolio" });
-      }
-      throw error;
+    // Check if already exists
+    const exists = await portfolioRepo.exists(ticker);
+    if (exists) {
+      return res.status(409).json({ error: "Already in portfolio" });
     }
 
-    res.status(201).json(data[0]);
+    const data = await portfolioRepo.create({ ticker, entry_price, quantity });
+    res.status(201).json(data);
   } catch (e) {
     console.error("Add to portfolio error:", e);
+    if (e.code === '23505') {
+      return res.status(409).json({ error: "Already in portfolio" });
+    }
     res.status(500).json({ error: "Failed to add to portfolio" });
   }
 });
 
 // DELETE /api/portfolio/:ticker - Ta bort från förvaltningslistan
 app.delete("/api/portfolio/:ticker", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker } = req.params;
-
-    const { error } = await supabase
-      .from('portfolio')
-      .delete()
-      .eq('ticker', ticker);
-
-    if (error) throw error;
+    await portfolioRepo.remove(ticker);
     res.status(204).send();
   } catch (e) {
     console.error("Delete from portfolio error:", e);
@@ -2014,20 +1946,13 @@ app.get("/api/quote/:ticker", async (req, res) => {
 
 // GET /api/portfolio/closed - Get all closed positions
 app.get("/api/portfolio/closed", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
-    const { data, error } = await supabase
-      .from('portfolio')
-      .select('*')
-      .eq('exit_status', 'EXITED')
-      .order('exit_date', { ascending: false });
-
-    if (error) throw error;
-
-    res.json(data || []);
+    const data = await portfolioRepo.findAllClosed();
+    res.json(data);
   } catch (e) {
     console.error("Get closed positions error:", e);
     res.status(500).json({ error: "Failed to fetch closed positions" });
@@ -2036,20 +1961,13 @@ app.get("/api/portfolio/closed", async (req, res) => {
 
 // GET /api/portfolio/:ticker - Get single position details
 app.get("/api/portfolio/:ticker", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker } = req.params;
-
-    const { data, error } = await supabase
-      .from('portfolio')
-      .select('*')
-      .eq('ticker', ticker)
-      .single();
-
-    if (error) throw error;
+    const data = await portfolioRepo.findByTicker(ticker);
 
     if (!data) {
       return res.status(404).json({ error: "Position not found" });
@@ -2064,22 +1982,14 @@ app.get("/api/portfolio/:ticker", async (req, res) => {
 
 // GET /api/portfolio/:ticker/events - Get all events for a position
 app.get("/api/portfolio/:ticker/events", async (req, res) => {
-  if (!supabase) {
+  if (!eventsRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker } = req.params;
-
-    const { data, error } = await supabase
-      .from('portfolio_events')
-      .select('*')
-      .eq('ticker', ticker)
-      .order('event_date', { ascending: true });
-
-    if (error) throw error;
-
-    res.json(data || []);
+    const data = await eventsRepo.findByTicker(ticker);
+    res.json(data);
   } catch (e) {
     console.error("Get portfolio events error:", e);
     res.status(500).json({ error: "Failed to fetch events" });
@@ -2088,7 +1998,7 @@ app.get("/api/portfolio/:ticker/events", async (req, res) => {
 
 // POST /api/portfolio/:ticker/evaluation - Save self-evaluation for closed position
 app.post("/api/portfolio/:ticker/evaluation", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
@@ -2104,23 +2014,16 @@ app.post("/api/portfolio/:ticker/evaluation", async (req, res) => {
       lesson_learned
     } = req.body;
 
-    const { data, error } = await supabase
-      .from('portfolio')
-      .update({
-        plan_followed,
-        exited_early,
-        stopped_out,
-        broke_rule,
-        could_scale_better,
-        edge_tag,
-        lesson_learned,
-        last_updated: new Date().toISOString().split('T')[0]
-      })
-      .eq('ticker', ticker)
-      .select()
-      .single();
-
-    if (error) throw error;
+    const data = await portfolioRepo.updateEvaluation(ticker, {
+      plan_followed,
+      exited_early,
+      stopped_out,
+      broke_rule,
+      could_scale_better,
+      edge_tag,
+      lesson_learned,
+      last_updated: new Date().toISOString().split('T')[0]
+    });
 
     res.json({ message: "Evaluation saved successfully", data });
   } catch (e) {
@@ -2131,7 +2034,7 @@ app.post("/api/portfolio/:ticker/evaluation", async (req, res) => {
 
 // POST /api/portfolio/update-field/:ticker - Update editable portfolio fields
 app.post("/api/portfolio/update-field/:ticker", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
@@ -2150,31 +2053,21 @@ app.post("/api/portfolio/update-field/:ticker", async (req, res) => {
       return res.status(400).json({ error: "Value required" });
     }
 
-    // Prepare update object
-    const updateData = {
+    // Update the field
+    await portfolioRepo.update(ticker, {
       [field]: value,
       last_updated: dayjs().format('YYYY-MM-DD')
-    };
-
-    // Update the field
-    const { error: updateError } = await supabase
-      .from('portfolio')
-      .update(updateData)
-      .eq('ticker', ticker);
-
-    if (updateError) throw updateError;
+    });
 
     // Log event if description provided
     if (event_description) {
       try {
-        await supabase
-          .from('portfolio_events')
-          .insert({
-            ticker,
-            event_date: dayjs().format('YYYY-MM-DD'),
-            event_type: field === 'current_stop' ? 'STOP_MOVED' : 'NOTE',
-            description: event_description
-          });
+        await eventsRepo.create({
+          ticker,
+          event_date: dayjs().format('YYYY-MM-DD'),
+          event_type: field === 'current_stop' ? 'STOP_MOVED' : 'NOTE',
+          description: event_description
+        });
       } catch (e) {
         console.log("Event logging skipped (table may not exist yet)");
       }
