@@ -11,11 +11,11 @@ import { useState, useEffect } from 'react';
 export default function EntryModal({ stock, onClose, onConfirm }) {
   // Manual entry data
   const [formData, setFormData] = useState({
-    entry_price: stock?.current_price || '',
+    entry_price: stock?.recommended_entry || stock?.current_price || '',
     position_size: '',
     position_value: '',
-    initial_stop: '',
-    initial_target: '',
+    initial_stop: stock?.recommended_stop || '',
+    initial_target: stock?.recommended_target || '',
     risk_per_trade_kr: '',
     risk_per_trade_pct: '',
     entry_rationale: '',
@@ -199,27 +199,29 @@ export default function EntryModal({ stock, onClose, onConfirm }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px' }}>
                 <div>
                   <div style={{ color: '#64748b', fontSize: '11px' }}>Pris</div>
-                  <div style={{ fontWeight: '600' }}>{stock.current_price?.toFixed(2)} kr</div>
+                  <div style={{ fontWeight: '600' }}>{stock.current_price?.toFixed(2) || '—'} kr</div>
                 </div>
                 <div>
                   <div style={{ color: '#64748b', fontSize: '11px' }}>RSI(14)</div>
-                  <div style={{ fontWeight: '600' }}>{stock.rsi?.toFixed(1)} ({stock.rsi_zone})</div>
+                  <div style={{ fontWeight: '600' }}>
+                    {stock.rsi ? `${stock.rsi.toFixed(1)} (${stock.rsi_zone || 'N/A'})` : '—'}
+                  </div>
                 </div>
                 <div>
                   <div style={{ color: '#64748b', fontSize: '11px' }}>Volym</div>
-                  <div style={{ fontWeight: '600' }}>{stock.volume_rel?.toFixed(1)}x</div>
+                  <div style={{ fontWeight: '600' }}>{stock.volume_rel ? `${stock.volume_rel.toFixed(1)}x` : '—'}</div>
                 </div>
                 <div>
                   <div style={{ color: '#64748b', fontSize: '11px' }}>EMA20</div>
-                  <div style={{ fontWeight: '600' }}>{stock.ema20?.toFixed(2)}</div>
+                  <div style={{ fontWeight: '600' }}>{stock.ema20?.toFixed(2) || '—'}</div>
                 </div>
                 <div>
                   <div style={{ color: '#64748b', fontSize: '11px' }}>EMA50</div>
-                  <div style={{ fontWeight: '600' }}>{stock.ema50?.toFixed(2)}</div>
+                  <div style={{ fontWeight: '600' }}>{stock.ema50?.toFixed(2) || '—'}</div>
                 </div>
                 <div>
                   <div style={{ color: '#64748b', fontSize: '11px' }}>Edge Score</div>
-                  <div style={{ fontWeight: '600' }}>{stock.edge_score?.toFixed(1)}</div>
+                  <div style={{ fontWeight: '600' }}>{stock.edge_score?.toFixed(1) || '—'}</div>
                 </div>
               </div>
 
@@ -239,7 +241,14 @@ export default function EntryModal({ stock, onClose, onConfirm }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
-                <label className="form-label">Entry-pris (kr)</label>
+                <label className="form-label">
+                  Entry-pris (kr)
+                  {stock?.recommended_entry && (
+                    <span style={{ fontSize: '11px', color: '#16a34a', marginLeft: '8px' }}>
+                      ✓ Rekommenderat: {stock.recommended_entry.toFixed(2)}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -260,7 +269,14 @@ export default function EntryModal({ stock, onClose, onConfirm }) {
                 />
               </div>
               <div>
-                <label className="form-label">Initial stop (kr)</label>
+                <label className="form-label">
+                  Initial stop (kr)
+                  {stock?.recommended_stop && (
+                    <span style={{ fontSize: '11px', color: '#16a34a', marginLeft: '8px' }}>
+                      ✓ Rekommenderat: {stock.recommended_stop.toFixed(2)}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -271,7 +287,14 @@ export default function EntryModal({ stock, onClose, onConfirm }) {
                 />
               </div>
               <div>
-                <label className="form-label">Initial target (kr)</label>
+                <label className="form-label">
+                  Initial target (kr)
+                  {stock?.recommended_target && (
+                    <span style={{ fontSize: '11px', color: '#16a34a', marginLeft: '8px' }}>
+                      ✓ Rekommenderat: {stock.recommended_target.toFixed(2)} (R/R: {stock.recommended_rr?.toFixed(2)})
+                    </span>
+                  )}
+                </label>
                 <input
                   type="number"
                   step="0.01"

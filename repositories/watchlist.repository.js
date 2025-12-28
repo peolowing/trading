@@ -39,7 +39,7 @@ export async function findAll(filters = {}) {
   let query = supabase
     .from('watchlist')
     .select('*')
-    .order('added_date', { ascending: false });
+    .order('ticker', { ascending: true });
 
   // Apply status filter if provided
   if (filters.status) {
@@ -176,7 +176,7 @@ export async function findByStatus(status) {
     .from('watchlist')
     .select('*')
     .eq('status', status)
-    .order('added_date', { ascending: false });
+    .order('ticker', { ascending: true });
 
   if (error) throw error;
   return data || [];
@@ -201,7 +201,7 @@ export async function findActive() {
     .from('watchlist')
     .select('*')
     .neq('status', 'ARCHIVED')
-    .order('added_date', { ascending: false });
+    .order('ticker', { ascending: true });
 
   if (error) throw error;
   return data || [];

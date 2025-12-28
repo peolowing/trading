@@ -101,6 +101,44 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     }
   }
 
+  async function prepareStockForEntry(item) {
+    try {
+      // Fetch full analysis with entry/stop/target recommendations
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: item.ticker })
+      });
+      const data = await res.json();
+
+      console.log('Analysis data for', item.ticker, ':', data);
+
+      // Enrich item with analysis data
+      const enriched = {
+        ...item,
+        // Recommended values
+        recommended_entry: data.trade?.entry,
+        recommended_stop: data.trade?.stop,
+        recommended_target: data.trade?.target,
+        recommended_rr: data.trade?.rr,
+        // Current technical data
+        current_price: data.trade?.entry || item.current_price,
+        ema20: data.indicators?.ema20,
+        ema50: data.indicators?.ema50,
+        rsi: data.indicators?.rsi14,
+        rsi_zone: data.indicators?.rsi_zone,
+        volume_rel: data.indicators?.relativeVolume,
+        edge_score: data.scoring?.total
+      };
+
+      console.log('Enriched stock:', enriched);
+      return enriched;
+    } catch (e) {
+      console.error("Failed to fetch analysis:", e);
+      return item; // Return original if fetch fails
+    }
+  }
+
   async function removeFromPortfolio(ticker) {
     try {
       await fetch(`/api/portfolio/${ticker}`, { method: "DELETE" });
@@ -142,10 +180,52 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     }
   }
 
-  function handleSearch(e) {
+  async function handleSearch(e) {
     e.preventDefault();
-    if (customInput.trim()) {
-      onSelectStock(customInput.trim().toUpperCase());
+    const ticker = customInput.trim().toUpperCase();
+    if (!ticker) return;
+
+    try {
+      // Fetch stock data
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker })
+      });
+
+      if (!res.ok) {
+        alert(`❌ Kunde inte hitta aktie: ${ticker}`);
+        return;
+      }
+
+      const data = await res.json();
+      const price = data.candles?.[data.candles.length - 1]?.close;
+      const setup = data.indicators?.setup || 'N/A';
+      const edgeScore = data.scoring?.score || 0;
+
+      // Show confirmation dialog
+      const confirm = window.confirm(
+        `Vill du lägga till ${ticker} i bevakning?\n\n` +
+        `Pris: ${price?.toFixed(2) || 'N/A'} kr\n` +
+        `Setup: ${setup}\n` +
+        `Edge Score: ${(edgeScore * 10).toFixed(0)}/100`
+      );
+
+      if (confirm) {
+        await addToWatchlist(ticker, {
+          price: price,
+          ema20: data.indicators?.ema20,
+          ema50: data.indicators?.ema50,
+          rsi14: data.indicators?.rsi14,
+          regime: data.indicators?.regime,
+          setup: setup,
+          relativeVolume: data.indicators?.relativeVolume
+        });
+        setCustomInput(''); // Clear search field
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      alert(`❌ Fel vid sökning: ${error.message}`);
     }
   }
 
@@ -154,12 +234,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
       <header className="header">
         <div>
           <p className="eyebrow">Veckotrading AI</p>
-          <h1>📊 Dashboard</h1>
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button className="ghost" onClick={() => onNavigate("screener-admin")}>
-            ⚙️ Screener
-          </button>
+          <h1>📈 Dashboard</h1>
         </div>
       </header>
 
@@ -193,6 +268,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
                   <th style={{ padding: "8px 12px", textAlign: "left" }}>Läge</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms.</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>EMA20 Δ%</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Vol×</th>
@@ -303,6 +379,16 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           {displayPrice ? displayPrice.toFixed(2) : "—"}
                         </td>
 
+                        {/* Omsättning */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                          <span style={{
+                            color: item.turnoverMSEK >= 100 ? "#16a34a" : item.turnoverMSEK >= 30 ? "#64748b" : "#94a3b8",
+                            fontWeight: "500"
+                          }}>
+                            {item.turnoverMSEK ? `${item.turnoverMSEK.toFixed(0)}M` : "—"}
+                          </span>
+                        </td>
+
                         {/* EMA20 Δ% */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600", color: ema20Color, fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {emaDist !== null && emaDist !== undefined ? `${emaDist > 0 ? '+' : ''}${emaDist.toFixed(1)}%` : "—"}
@@ -372,9 +458,10 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
                             <button
                               className="action-btn"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                setSelectedStock(item);
+                                const enrichedStock = await prepareStockForEntry(item);
+                                setSelectedStock(enrichedStock);
                                 setShowEntryModal(true);
                               }}
                               title={isReady ? "Lägg till i portfolio" : "Lägg till i portfolio (diskretionär entry)"}
@@ -690,6 +777,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     <th style={{ padding: "8px 12px", textAlign: "left" }}>#</th>
                     <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
                     <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
+                    <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms.</th>
                     <th style={{ padding: "8px 12px", textAlign: "center" }}>Trend</th>
                     <th style={{ padding: "8px 12px", textAlign: "right" }}>RSI</th>
                     <th style={{ padding: "8px 12px", textAlign: "right" }}>Vol×</th>
@@ -753,6 +841,14 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                           {item.price?.toFixed(2) || "N/A"}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                          <span style={{
+                            color: item.turnoverMSEK >= 100 ? "#16a34a" : item.turnoverMSEK >= 30 ? "#64748b" : "#94a3b8",
+                            fontWeight: "500"
+                          }}>
+                            {item.turnoverMSEK?.toFixed(0) || "N/A"}M
+                          </span>
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <span style={{ fontSize: "16px", color: trendColor }}>{trendIcon}</span>

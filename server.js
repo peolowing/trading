@@ -600,6 +600,45 @@ app.post("/api/analyze", async (req, res) => {
       }
     }
 
+    // Calculate trade recommendations (entry, stop, target)
+    const lastATR = atr14[atr14.length - 1];
+    let trade = null;
+
+    if (setup !== "Hold" && lastATR) {
+      const entry = lastClose;
+      const atrMultiplier = 1.5; // Stop distance
+      const rrRatio = 2.0; // Risk/Reward ratio
+
+      // For long setups
+      if (regime === "Bullish Trend" || setup.includes("Pullback") || setup.includes("Breakout")) {
+        const stop = entry - (lastATR * atrMultiplier);
+        const target = entry + ((entry - stop) * rrRatio);
+
+        trade = {
+          direction: "LONG",
+          entry: parseFloat(entry.toFixed(2)),
+          stop: parseFloat(stop.toFixed(2)),
+          target: parseFloat(target.toFixed(2)),
+          rr: rrRatio,
+          atr: parseFloat(lastATR.toFixed(2))
+        };
+      }
+      // For short setups
+      else if (regime === "Bearish Trend") {
+        const stop = entry + (lastATR * atrMultiplier);
+        const target = entry - ((stop - entry) * rrRatio);
+
+        trade = {
+          direction: "SHORT",
+          entry: parseFloat(entry.toFixed(2)),
+          stop: parseFloat(stop.toFixed(2)),
+          target: parseFloat(target.toFixed(2)),
+          rr: rrRatio,
+          atr: parseFloat(lastATR.toFixed(2))
+        };
+      }
+    }
+
     res.json({
       candles: candles.map(c => ({
         ...c,
@@ -611,6 +650,7 @@ app.post("/api/analyze", async (req, res) => {
       atr14,
       indicators,
       scoring,
+      trade,
       backtest: backtestResult
     });
   } catch (error) {
@@ -641,11 +681,15 @@ app.post("/api/ai-analysis", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: `Du är en erfaren swing trader som analyserar veckotrading-möjligheter.
+          content: `Du är en erfaren svensk swing trader som analyserar veckotrading-möjligheter.
 
-VIKTIGT: Svara ENDAST på svenska. All text ska vara på svenska.
+KRITISKT VIKTIGT:
+- Svara ENDAST på svenska
+- ALLA rubriker ska börja med ##
+- ALDRIG på engelska
+- Använd exakt denna struktur:
 
-Ge ditt svar i exakt följande struktur på svenska:
+Ge ditt svar i exakt följande format:
 
 ## MARKNADSLÄGE
 [2-3 meningar om trenden, nuvarande prisnivå och om aktien är i en uppåt-, nedåt- eller sidledes trend]
@@ -709,8 +753,8 @@ function passesVolumeFilter(candles) {
   const last = candles.at(-1);
   const turnoverSEK = last.close * last.volume;
 
-  // Turnover > 50M SEK
-  if (turnoverSEK < 50_000_000) return false;
+  // Turnover > 30M SEK
+  if (turnoverSEK < 30_000_000) return false;
 
   // Relative volume
   const volumes = candles.slice(-20).map(c => c.volume);
@@ -765,7 +809,7 @@ function computeRanking(features, candles) {
   const turnoverM = (last.close * last.volume) / 1_000_000;
   if (turnoverM > 200) score += 30;
   else if (turnoverM > 100) score += 20;
-  else if (turnoverM > 50) score += 10;
+  else if (turnoverM > 30) score += 10;
 
   // 2. Trend (30 pts)
   if (features.regime === "UPTREND") {
@@ -903,9 +947,15 @@ app.get("/api/screener", async (req, res) => {
 
           const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
 
+          // Calculate turnover in MSEK
+          const lastVolume = candles.at(-1).volume;
+          const turnoverMSEK = (lastClose * lastVolume) / 1_000_000;
+
           return {
             ticker,
             price: lastClose,
+            volume: lastVolume,
+            turnoverMSEK: parseFloat(turnoverMSEK.toFixed(1)),
             ema20: lastEma20,
             ema50: lastEma50,
             rsi: lastRsi,
@@ -993,7 +1043,7 @@ app.post("/api/screener/stocks", async (req, res) => {
         const last = data.at(-1);
         const turnoverM = (last.close * last.volume) / 1_000_000;
         return res.status(400).json({
-          error: `Aktien uppfyller inte volymkraven. Nuvarande omsättning: ${turnoverM.toFixed(1)}M (krav: >50M)`
+          error: `Aktien uppfyller inte volymkraven. Nuvarande omsättning: ${turnoverM.toFixed(1)}M (krav: >30M)`
         });
       }
 
@@ -1198,7 +1248,40 @@ app.get("/api/watchlist", async (req, res) => {
 
   try {
     const stocks = await watchlistRepo.findAll();
-    res.json({ stocks });
+
+    // Enrich with current price and turnover
+    const enrichedStocks = await Promise.all(
+      stocks.map(async (stock) => {
+        try {
+          const today = dayjs().format('YYYY-MM-DD');
+          const startDate = dayjs().subtract(5, 'days').format('YYYY-MM-DD');
+
+          // Get latest market data
+          const data = await yahooFinance.historical(stock.ticker, {
+            period1: startDate,
+            interval: "1d"
+          });
+
+          if (data && data.length > 0) {
+            const latest = data[data.length - 1];
+            const turnoverMSEK = (latest.close * latest.volume) / 1_000_000;
+
+            return {
+              ...stock,
+              current_price: latest.close,
+              turnoverMSEK: parseFloat(turnoverMSEK.toFixed(1))
+            };
+          }
+
+          return stock;
+        } catch (e) {
+          console.warn(`Failed to enrich ${stock.ticker}:`, e.message);
+          return stock;
+        }
+      })
+    );
+
+    res.json({ stocks: enrichedStocks });
   } catch (e) {
     console.error("Get watchlist error:", e);
     res.status(500).json({ error: "Failed to fetch watchlist" });

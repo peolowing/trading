@@ -10,7 +10,6 @@ import {
   YAxis
 } from "recharts";
 import TradeChart from "./components/TradeChart";
-import ScreenerAdmin from "./components/ScreenerAdmin";
 import Dashboard from "./components/Dashboard";
 import PositionDetail from "./components/PositionDetail";
 import ClosedPositions from "./components/ClosedPositions";
@@ -22,26 +21,13 @@ export default function App() {
   const [error, setError] = useState("");
   const [learnMode, setLearnMode] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
-  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "screener-admin", "position-detail", "closed-positions", or "closed-position-detail"
+  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "position-detail", "closed-positions", or "closed-position-detail"
 
   useEffect(() => {
     if (selectedStock) {
       loadData();
     }
   }, [selectedStock]);
-
-  async function loadScreener() {
-    setScreenerLoading(true);
-    try {
-      const res = await fetch("/api/screener");
-      const data = await res.json();
-      setScreenerData(data.stocks || []);
-    } catch (e) {
-      console.error("Screener error:", e);
-    } finally {
-      setScreenerLoading(false);
-    }
-  }
 
   async function loadData() {
     setLoading(true);
@@ -119,11 +105,6 @@ export default function App() {
     );
   }
 
-  // Render Screener Admin if that view is selected
-  if (currentView === "screener-admin") {
-    return <ScreenerAdmin onNavigate={() => setCurrentView("dashboard")} />;
-  }
-
   // Render Closed Positions list if that view is selected
   if (currentView === "closed-positions") {
     return (
@@ -170,7 +151,25 @@ export default function App() {
   }
 
   const { analysis, ai } = data;
-  const { scoring, indicators, backtest, regime, setup } = analysis || {};
+  const { scoring, indicators, backtest } = analysis || {};
+
+  // Översätt regime till svenska
+  const regimeTranslations = {
+    "Bullish Trend": "Upptrend",
+    "Bearish Trend": "Nedtrend",
+    "Consolidation": "Sidledes"
+  };
+  const regime = regimeTranslations[indicators?.regime] || indicators?.regime || "N/A";
+
+  // Översätt setup till svenska
+  const setupTranslations = {
+    "Pullback": "Pullback",
+    "Breakout": "Breakout",
+    "Reversal": "Reversal",
+    "Trend Following": "Trendföljning",
+    "Hold": "Ingen setup"
+  };
+  const setup = setupTranslations[indicators?.setup] || indicators?.setup || "N/A";
   const stats = backtest?.stats || {
     trades: 0,
     winRate: 0,
@@ -237,28 +236,6 @@ export default function App() {
           >
             ⭐ Lägg till i Bevakningslista
           </button>
-          <button
-            className="ghost"
-            style={{ background: "#dcfce7", borderColor: "#86efac" }}
-            onClick={() => {
-              const entryPrice = prompt(`Köppris för ${selectedStock}:`);
-              const quantity = prompt(`Antal aktier:`);
-              if (entryPrice && quantity) {
-                fetch("/api/portfolio", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    ticker: selectedStock,
-                    entryPrice: parseFloat(entryPrice),
-                    quantity: parseInt(quantity)
-                  })
-                }).then(() => alert(`${selectedStock} tillagd i förvaltningslistan!`))
-                .catch(() => alert("Kunde inte lägga till i förvaltningslistan"));
-              }
-            }}
-          >
-            💼 Lägg till i Förvaltningslista
-          </button>
         </div>
       </div>
 
@@ -282,21 +259,17 @@ export default function App() {
         <div className="score-meta">
           <div>
             <p className="eyebrow">Trend</p>
-            <strong>{regime === "UPTREND" ? "Upptrend" : "Nedtrend"}</strong>
+            <strong>{regime}</strong>
           </div>
           <div>
             <p className="eyebrow">Setup</p>
-            <strong>{setup === "LONG_PULLBACK" ? "Lång pullback" : "Ingen setup"}</strong>
+            <strong>{setup}</strong>
           </div>
           <div>
             <p className="eyebrow">Relativ volym</p>
             <strong>{indicators?.relativeVolume?.toFixed(2) || "N/A"}x</strong>
           </div>
         </div>
-      </div>
-
-      <div className={`decision ${rr >= 2 ? "yes" : "no"}`}>
-        {rr >= 2 ? "✅ MÖJLIG VECKOTRADE" : "❌ INGEN TRADE JUST NU"}
       </div>
 
       <div className="card">
