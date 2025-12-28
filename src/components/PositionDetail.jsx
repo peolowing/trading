@@ -66,8 +66,29 @@ export default function PositionDetail({ ticker, onBack }) {
 
       // API returns either {portfolio: [...]} or {stocks: [...]}
       const positions = posData.portfolio || posData.stocks || [];
-      if (positions.length > 0) {
-        setPosition(positions[0]);
+      let basePosition = positions.length > 0 ? positions[0] : null;
+
+      // Fetch FRESH price from Yahoo Finance
+      if (basePosition) {
+        try {
+          const quoteRes = await fetch(`/api/quote/${ticker}`);
+          if (quoteRes.ok) {
+            const quoteData = await quoteRes.json();
+            // Override current_price with fresh data
+            basePosition = {
+              ...basePosition,
+              current_price: quoteData.price,
+              price_change: quoteData.change,
+              price_change_pct: quoteData.changePercent,
+              price_timestamp: quoteData.timestamp
+            };
+          }
+        } catch (quoteError) {
+          console.warn("Failed to fetch fresh quote, using cached price:", quoteError);
+          // Continue with cached price from database
+        }
+
+        setPosition(basePosition);
       }
 
       // Fetch event log for this position
@@ -661,8 +682,24 @@ export default function PositionDetail({ ticker, onBack }) {
             <tbody>
               <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
                 <td style={{ padding: "8px 0", color: "#64748b", width: "50%" }}>Aktuellt pris</td>
-                <td style={{ padding: "8px 0", fontWeight: "700", fontSize: "16px", fontVariantNumeric: "tabular-nums" }}>
-                  {currentPrice.toFixed(2)}
+                <td style={{ padding: "8px 0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: "700", fontSize: "16px", fontVariantNumeric: "tabular-nums" }}>
+                      {currentPrice.toFixed(2)}
+                    </span>
+                    {position.price_change_pct !== undefined && (
+                      <span style={{
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: position.price_change_pct >= 0 ? "#16a34a" : "#dc2626",
+                        background: position.price_change_pct >= 0 ? "#dcfce7" : "#fee2e2",
+                        padding: "2px 8px",
+                        borderRadius: "4px"
+                      }}>
+                        {position.price_change_pct >= 0 ? '+' : ''}{position.price_change_pct?.toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
                 </td>
               </tr>
               <tr style={{ borderBottom: "1px solid #f1f5f9" }}>

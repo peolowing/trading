@@ -1991,6 +1991,27 @@ app.post("/api/portfolio/move-stop/:ticker", async (req, res) => {
   }
 });
 
+// GET /api/quote/:ticker - Hämta realtidspris från Yahoo Finance
+app.get("/api/quote/:ticker", async (req, res) => {
+  try {
+    const { ticker } = req.params;
+
+    // Hämta quote från Yahoo Finance
+    const quote = await yahooFinance.quote(ticker);
+
+    res.json({
+      price: quote.regularMarketPrice,
+      previousClose: quote.regularMarketPreviousClose,
+      timestamp: quote.regularMarketTime,
+      change: quote.regularMarketChange,
+      changePercent: quote.regularMarketChangePercent
+    });
+  } catch (e) {
+    console.error("Get quote error:", e);
+    res.status(500).json({ error: "Failed to fetch quote" });
+  }
+});
+
 // POST /api/portfolio/update-field/:ticker - Update editable portfolio fields
 app.post("/api/portfolio/update-field/:ticker", async (req, res) => {
   if (!supabase) {
