@@ -460,70 +460,70 @@ export default function PositionDetail({ ticker, onBack }) {
 
         <div style={{
           display: "flex",
-          gap: "12px",
+          gap: "8px",
           width: "100%",
           flexWrap: "wrap"
         }}>
           <button
             onClick={onBack}
             style={{
-              flex: "1 1 auto",
-              minWidth: "140px",
-              padding: "12px 20px",
-              background: "#ffffff",
-              border: "2px solid #e2e8f0",
-              borderRadius: "8px",
-              fontSize: "14px",
-              fontWeight: "600",
-              color: "#0f172a",
+              flex: "0 0 auto",
+              padding: "6px 12px",
+              background: "transparent",
+              border: "1px solid #e2e8f0",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              color: "#64748b",
               cursor: "pointer",
-              transition: "all 0.2s",
+              transition: "all 0.15s",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "8px"
+              gap: "6px"
             }}
             onMouseEnter={(e) => {
               e.target.style.background = "#f8fafc";
-              e.target.style.borderColor = "#cbd5e1";
+              e.target.style.color = "#0f172a";
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = "#ffffff";
-              e.target.style.borderColor = "#e2e8f0";
+              e.target.style.background = "transparent";
+              e.target.style.color = "#64748b";
             }}
           >
-            <span style={{ fontSize: "16px" }}>←</span>
+            <span style={{ fontSize: "14px" }}>←</span>
             <span>Dashboard</span>
           </button>
           {!isExited && (
             <button
               style={{
-                flex: "1 1 auto",
-                minWidth: "140px",
-                padding: "12px 20px",
-                background: showExitForm ? "#64748b" : "#dc2626",
-                border: "2px solid " + (showExitForm ? "#64748b" : "#dc2626"),
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: "600",
-                color: "white",
+                flex: "0 0 auto",
+                padding: "6px 12px",
+                background: "transparent",
+                border: "1px solid " + (showExitForm ? "#64748b" : "#fca5a5"),
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: "500",
+                color: showExitForm ? "#64748b" : "#dc2626",
                 cursor: "pointer",
-                transition: "all 0.2s",
+                transition: "all 0.15s",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "8px"
+                gap: "6px"
               }}
               onClick={() => setShowExitForm(!showExitForm)}
               onMouseEnter={(e) => {
-                e.target.style.background = showExitForm ? "#475569" : "#b91c1c";
+                e.target.style.background = showExitForm ? "#f1f5f9" : "#fef2f2";
+                e.target.style.color = showExitForm ? "#0f172a" : "#b91c1c";
               }}
               onMouseLeave={(e) => {
-                e.target.style.background = showExitForm ? "#64748b" : "#dc2626";
+                e.target.style.background = "transparent";
+                e.target.style.color = showExitForm ? "#64748b" : "#dc2626";
               }}
             >
-              <span style={{ fontSize: "16px" }}>{showExitForm ? "✕" : "⬆"}</span>
-              <span>{showExitForm ? "Stäng Exit" : "Exit Position"}</span>
+              <span style={{ fontSize: "14px" }}>{showExitForm ? "✕" : "⬆"}</span>
+              <span>{showExitForm ? "Stäng" : "Exit"}</span>
             </button>
           )}
         </div>
