@@ -29,7 +29,7 @@ export default function TradeJournal({ onNavigate }) {
     try {
       const res = await fetch("/api/trades");
       const data = await res.json();
-      setTrades(data);
+      setTrades(data.trades || []);
     } catch (e) {
       console.error("Failed to load trades:", e);
     } finally {

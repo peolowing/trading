@@ -1133,20 +1133,29 @@ app.delete("/api/screener/stocks/:ticker", async (req, res) => {
 
 // ==================== TRADE JOURNAL ====================
 
-// GET /api/trades - Hämta alla trades
+// GET /api/trades - Hämta alla trades (eller filter på ticker)
 app.get("/api/trades", async (req, res) => {
   if (!supabase) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
-    const { data, error } = await supabase
+    const { ticker } = req.query;
+
+    let query = supabase
       .from('trades')
       .select('*')
       .order('date', { ascending: false });
 
+    // Filter by ticker if provided
+    if (ticker) {
+      query = query.eq('ticker', ticker);
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
-    res.json(data || []);
+    res.json({ trades: data || [] });
   } catch (e) {
     console.error("Get trades error:", e);
     res.status(500).json({ error: "Failed to fetch trades" });
@@ -1498,10 +1507,20 @@ app.get("/api/portfolio", async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
+    const { ticker } = req.query;
+
+    let query = supabase
       .from('portfolio')
-      .select('*')
-      .order('added_at', { ascending: false });
+      .select('*');
+
+    // If ticker is specified, filter by it
+    if (ticker) {
+      query = query.eq('ticker', ticker);
+    } else {
+      query = query.order('added_at', { ascending: false });
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
     res.json({ stocks: data || [] });
@@ -1682,6 +1701,351 @@ app.post("/api/portfolio/update", async (req, res) => {
   } catch (e) {
     console.error("[Portfolio Update] Error:", e);
     res.status(500).json({ error: "Failed to update portfolio" });
+  }
+});
+
+// GET /api/portfolio/events - Hämta händelselogg för en position
+app.get("/api/portfolio/events", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.query;
+
+    if (!ticker) {
+      return res.status(400).json({ error: "ticker required" });
+    }
+
+    // Check if portfolio_events table exists, if not return empty array
+    const { data, error } = await supabase
+      .from('portfolio_events')
+      .select('*')
+      .eq('ticker', ticker)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // If table doesn't exist yet, return empty array
+      if (error.code === '42P01') {
+        return res.json({ events: [] });
+      }
+      throw error;
+    }
+
+    res.json({ events: data || [] });
+  } catch (e) {
+    console.error("Get portfolio events error:", e);
+    res.status(500).json({ error: "Failed to get events" });
+  }
+});
+
+// POST /api/portfolio/exit/:ticker - Exit en position
+app.post("/api/portfolio/exit/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const {
+      exit_type,
+      exit_price,
+      exit_quantity,
+      lessons_learned,
+      followed_plan,
+      exit_too_early,
+      let_market_decide,
+      good_entry_bad_exit,
+      broke_rules
+    } = req.body;
+
+    // Fetch current position
+    const { data: position, error: fetchError } = await supabase
+      .from('portfolio')
+      .select('*')
+      .eq('ticker', ticker)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!position) {
+      return res.status(404).json({ error: "Position not found" });
+    }
+
+    const exitPriceNum = parseFloat(exit_price);
+    const exitDate = dayjs().format('YYYY-MM-DD');
+
+    // Calculate final R-multiple
+    const finalR = position.initial_r > 0
+      ? (exitPriceNum - position.entry_price) / position.initial_r
+      : 0;
+
+    // Create exit checklist object
+    const exitChecklist = {
+      followed_plan,
+      exit_too_early,
+      let_market_decide,
+      good_entry_bad_exit,
+      broke_rules
+    };
+
+    if (exit_type === 'FULL') {
+      // Full exit - update position as exited
+      const { error: updateError } = await supabase
+        .from('portfolio')
+        .update({
+          exit_date: exitDate,
+          exit_price: exitPriceNum,
+          exit_type,
+          r_multiple: parseFloat(finalR.toFixed(2)),
+          pnl_pct: parseFloat(((exitPriceNum - position.entry_price) / position.entry_price * 100).toFixed(2)),
+          current_status: 'EXITED',
+          lessons_learned,
+          exit_checklist: exitChecklist,
+          last_updated: exitDate
+        })
+        .eq('ticker', ticker);
+
+      if (updateError) throw updateError;
+
+      // Log event
+      try {
+        await supabase
+          .from('portfolio_events')
+          .insert({
+            ticker,
+            event_date: exitDate,
+            event_type: 'EXIT',
+            description: `Sålt hela positionen @ ${exitPriceNum.toFixed(2)} (${finalR.toFixed(1)}R)`
+          });
+      } catch (e) {
+        // If table doesn't exist, skip event logging
+        console.log("Event logging skipped (table may not exist yet)");
+      }
+
+    } else if (exit_type === 'PARTIAL') {
+      // Partial exit - reduce quantity
+      const newQuantity = position.quantity - parseInt(exit_quantity || position.quantity / 2);
+
+      const { error: updateError } = await supabase
+        .from('portfolio')
+        .update({
+          quantity: newQuantity,
+          current_status: 'PARTIAL_EXIT',
+          last_updated: exitDate
+        })
+        .eq('ticker', ticker);
+
+      if (updateError) throw updateError;
+
+      // Log event
+      try {
+        await supabase
+          .from('portfolio_events')
+          .insert({
+            ticker,
+            event_date: exitDate,
+            event_type: 'PARTIAL_EXIT',
+            description: `Sålt ${exit_quantity} aktier @ ${exitPriceNum.toFixed(2)} (kvar: ${newQuantity})`
+          });
+      } catch (e) {
+        console.log("Event logging skipped");
+      }
+
+    } else if (exit_type === 'STOP_HIT') {
+      // Stop hit - full exit
+      const { error: updateError } = await supabase
+        .from('portfolio')
+        .update({
+          exit_date: exitDate,
+          exit_price: exitPriceNum,
+          exit_type,
+          r_multiple: parseFloat(finalR.toFixed(2)),
+          pnl_pct: parseFloat(((exitPriceNum - position.entry_price) / position.entry_price * 100).toFixed(2)),
+          current_status: 'STOP_HIT',
+          lessons_learned,
+          exit_checklist: exitChecklist,
+          last_updated: exitDate
+        })
+        .eq('ticker', ticker);
+
+      if (updateError) throw updateError;
+
+      // Log event
+      try {
+        await supabase
+          .from('portfolio_events')
+          .insert({
+            ticker,
+            event_date: exitDate,
+            event_type: 'STOP_HIT',
+            description: `Stop träffad @ ${exitPriceNum.toFixed(2)} (${finalR.toFixed(1)}R)`
+          });
+      } catch (e) {
+        console.log("Event logging skipped");
+      }
+    }
+
+    res.json({ message: "Position exited successfully" });
+  } catch (e) {
+    console.error("Exit position error:", e);
+    res.status(500).json({ error: "Failed to exit position" });
+  }
+});
+
+// POST /api/portfolio/notes/:ticker - Lägg till notering
+app.post("/api/portfolio/notes/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const { note } = req.body;
+
+    if (!note) {
+      return res.status(400).json({ error: "note required" });
+    }
+
+    const eventDate = dayjs().format('YYYY-MM-DD');
+
+    // Add note to events log
+    try {
+      const { error } = await supabase
+        .from('portfolio_events')
+        .insert({
+          ticker,
+          event_date: eventDate,
+          event_type: 'NOTE',
+          description: note
+        });
+
+      if (error) throw error;
+    } catch (e) {
+      // If table doesn't exist, skip
+      console.log("Event logging skipped (table may not exist yet)");
+    }
+
+    res.json({ message: "Note added successfully" });
+  } catch (e) {
+    console.error("Add note error:", e);
+    res.status(500).json({ error: "Failed to add note" });
+  }
+});
+
+// POST /api/portfolio/move-stop/:ticker - Flytta stop
+app.post("/api/portfolio/move-stop/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const { new_stop } = req.body;
+
+    if (!new_stop) {
+      return res.status(400).json({ error: "new_stop required" });
+    }
+
+    const newStopNum = parseFloat(new_stop);
+
+    // Fetch current position to get old stop
+    const { data: position, error: fetchError } = await supabase
+      .from('portfolio')
+      .select('current_stop')
+      .eq('ticker', ticker)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    const oldStop = position?.current_stop || 0;
+
+    // Update stop
+    const { error: updateError } = await supabase
+      .from('portfolio')
+      .update({
+        current_stop: newStopNum,
+        last_updated: dayjs().format('YYYY-MM-DD')
+      })
+      .eq('ticker', ticker);
+
+    if (updateError) throw updateError;
+
+    // Log event
+    try {
+      await supabase
+        .from('portfolio_events')
+        .insert({
+          ticker,
+          event_date: dayjs().format('YYYY-MM-DD'),
+          event_type: 'STOP_MOVED',
+          description: `Stop flyttad: ${oldStop.toFixed(2)} → ${newStopNum.toFixed(2)}`
+        });
+    } catch (e) {
+      console.log("Event logging skipped");
+    }
+
+    res.json({ message: "Stop moved successfully" });
+  } catch (e) {
+    console.error("Move stop error:", e);
+    res.status(500).json({ error: "Failed to move stop" });
+  }
+});
+
+// POST /api/portfolio/update-field/:ticker - Update editable portfolio fields
+app.post("/api/portfolio/update-field/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const { field, value, event_description } = req.body;
+
+    // Allowed editable fields
+    const allowedFields = ['current_stop', 'current_target', 'trailing_type'];
+
+    if (!allowedFields.includes(field)) {
+      return res.status(400).json({ error: `Field '${field}' is not editable` });
+    }
+
+    if (value === undefined || value === null) {
+      return res.status(400).json({ error: "Value required" });
+    }
+
+    // Prepare update object
+    const updateData = {
+      [field]: value,
+      last_updated: dayjs().format('YYYY-MM-DD')
+    };
+
+    // Update the field
+    const { error: updateError } = await supabase
+      .from('portfolio')
+      .update(updateData)
+      .eq('ticker', ticker);
+
+    if (updateError) throw updateError;
+
+    // Log event if description provided
+    if (event_description) {
+      try {
+        await supabase
+          .from('portfolio_events')
+          .insert({
+            ticker,
+            event_date: dayjs().format('YYYY-MM-DD'),
+            event_type: field === 'current_stop' ? 'STOP_MOVED' : 'NOTE',
+            description: event_description
+          });
+      } catch (e) {
+        console.log("Event logging skipped (table may not exist yet)");
+      }
+    }
+
+    res.json({ message: "Field updated successfully" });
+  } catch (e) {
+    console.error("Update field error:", e);
+    res.status(500).json({ error: "Failed to update field" });
   }
 });
 

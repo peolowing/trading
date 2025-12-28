@@ -6,6 +6,7 @@ import { EMA, RSI, ATR } from "technicalindicators";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+import { updateWatchlistStatus, buildWatchlistInput } from "./watchlistLogic.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -109,9 +110,9 @@ async function saveAIAnalysis(ticker, date, analysis) {
       .from('ai_analysis')
       .upsert({
         ticker,
-        date,
+        analysis_date: date,
         analysis_text: analysis
-      }, { onConflict: 'ticker,date' });
+      }, { onConflict: 'ticker,analysis_date' });
 
     if (error) console.error("Supabase ai_analysis error:", error);
   } catch (e) {
@@ -127,7 +128,7 @@ async function getAIAnalysis(ticker, date) {
       .from('ai_analysis')
       .select('*')
       .eq('ticker', ticker)
-      .eq('date', date)
+      .eq('analysis_date', date)
       .single();
 
     if (error) {
@@ -151,7 +152,7 @@ async function saveBacktestResults(ticker, date, results) {
       .from('backtest_results')
       .upsert({
         ticker,
-        date,
+        analysis_date: date,
         strategy: results.strategy,
         total_signals: results.totalSignals,
         wins: results.wins,
@@ -163,7 +164,7 @@ async function saveBacktestResults(ticker, date, results) {
         max_drawdown: results.maxDrawdown,
         sharpe_ratio: results.sharpeRatio,
         trades_data: results.trades
-      }, { onConflict: 'ticker,date,strategy' });
+      }, { onConflict: 'ticker,analysis_date,strategy' });
 
     if (error) console.error("Supabase backtest_results error:", error);
   } catch (e) {
@@ -179,7 +180,7 @@ async function getBacktestResults(ticker, date, strategy) {
       .from('backtest_results')
       .select('*')
       .eq('ticker', ticker)
-      .eq('date', date)
+      .eq('analysis_date', date)
       .eq('strategy', strategy)
       .single();
 
@@ -363,8 +364,8 @@ function runBacktest(candles, strategy) {
   const wins = trades.filter(t => t.profit > 0);
   const losses = trades.filter(t => t.profit <= 0);
   const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : 0;
-  const avgWin = wins.length > 0 ? wins.reduce((sum, t) => sum + t.profit, 0) / wins.length : 0;
-  const avgLoss = losses.length > 0 ? losses.reduce((sum, t) => sum + t.profit, 0) / losses.length : 0;
+  const avgWin = wins.length > 0 ? wins.reduce((sum, t) => sum + t.returnPct, 0) / wins.length : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((sum, t) => sum + t.returnPct, 0) / losses.length : 0;
   const totalReturn = ((equity - 10000) / 10000) * 100;
 
   const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
@@ -530,6 +531,63 @@ app.post("/api/analyze", async (req, res) => {
       setup
     };
 
+    // Calculate edge score (0-10 scale)
+    let edgeScore = 5;
+    if (regime === "Bullish Trend") edgeScore += 2;
+    else if (regime === "Bearish Trend") edgeScore -= 2;
+    if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
+    if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
+    if (relativeVolume > 1.5) edgeScore += 1;
+    if (relativeVolume < 0.8) edgeScore -= 0.5;
+    if (setup !== "Hold") edgeScore += 0.5;
+
+    const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+
+    const scoring = {
+      score: finalEdgeScore,
+      label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+    };
+
+    // Run backtest with detected strategy
+    const today = dayjs().format('YYYY-MM-DD');
+    let backtestResult = null;
+
+    if (ticker && setup !== "Hold") {
+      // Try to get cached backtest results first
+      const cached = await getBacktestResults(ticker, today, setup);
+      if (cached) {
+        backtestResult = {
+          strategy: setup,
+          stats: {
+            trades: cached.total_signals,
+            winRate: cached.win_rate,
+            totalReturn: cached.total_return,
+            avgWin: cached.avg_win,
+            avgLoss: cached.avg_loss,
+            expectancy: cached.avg_win * (cached.win_rate / 100) + cached.avg_loss * (1 - cached.win_rate / 100)
+          },
+          currentPosition: null // Not tracking current position in cached data
+        };
+      } else {
+        // Run fresh backtest
+        const bt = runBacktest(candles, setup);
+        await saveBacktestResults(ticker, today, bt);
+
+        backtestResult = {
+          strategy: setup,
+          stats: {
+            trades: bt.totalSignals,
+            winRate: bt.winRate,
+            totalReturn: bt.totalReturn,
+            avgWin: bt.avgWin,
+            avgLoss: bt.avgLoss,
+            expectancy: bt.winRate > 0 ? (bt.avgWin * bt.winRate / 100) + (bt.avgLoss * (1 - bt.winRate / 100)) : 0
+          },
+          currentPosition: null // Not tracking current position
+        };
+      }
+    }
+
     res.json({
       candles: candles.map(c => ({
         ...c,
@@ -539,7 +597,9 @@ app.post("/api/analyze", async (req, res) => {
       ema50,
       rsi14,
       atr14,
-      indicators
+      indicators,
+      scoring,
+      backtest: backtestResult
     });
   } catch (error) {
     console.error("Error in /api/analyze:", error);
@@ -948,6 +1008,351 @@ app.delete("/api/trades/:id", async (req, res) => {
   } catch (e) {
     console.error("Delete trade error:", e);
     res.status(500).json({ error: "Failed to delete trade" });
+  }
+});
+
+// Watchlist endpoints
+app.get("/api/watchlist", async (req, res) => {
+  if (!supabase) {
+    return res.json({ stocks: [] });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('watchlist')
+      .select('*')
+      .order('added_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ stocks: data || [] });
+  } catch (e) {
+    console.error("Get watchlist error:", e);
+    res.status(500).json({ error: "Failed to fetch watchlist" });
+  }
+});
+
+app.post("/api/watchlist", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase not configured" });
+  }
+
+  try {
+    const { ticker, indicators } = req.body;
+
+    if (!ticker) {
+      return res.status(400).json({ error: "Ticker is required" });
+    }
+
+    const normalizedTicker = ticker.toUpperCase();
+
+    // Bygg initial snapshot
+    const today = dayjs().format('YYYY-MM-DD');
+    const insertData = {
+      ticker: normalizedTicker,
+      last_updated: today,
+      days_in_watchlist: 0
+    };
+
+    // Om indicators finns med (från frontend), spara initial snapshot
+    if (indicators) {
+      insertData.initial_price = indicators.price || null;
+      insertData.initial_ema20 = indicators.ema20 || null;
+      insertData.initial_ema50 = indicators.ema50 || null;
+      insertData.initial_rsi14 = indicators.rsi14 || null;
+      insertData.initial_regime = indicators.regime || null;
+      insertData.initial_setup = indicators.setup || null;
+
+      // Kör första statusuppdateringen direkt
+      if (indicators.ema20 && indicators.ema50 && indicators.rsi14) {
+        const input = {
+          ticker: normalizedTicker,
+          price: {
+            close: indicators.price || 0,
+            high: indicators.price || 0,
+            low: indicators.price || 0
+          },
+          indicators: {
+            ema20: indicators.ema20,
+            ema50: indicators.ema50,
+            ema50_slope: 0.001,
+            rsi14: indicators.rsi14
+          },
+          volume: {
+            relVol: indicators.relativeVolume || 1
+          },
+          structure: {
+            higherLow: true
+          },
+          prevStatus: null,
+          daysInWatchlist: 0
+        };
+
+        const result = updateWatchlistStatus(input);
+
+        insertData.current_status = result.status;
+        insertData.current_action = result.action;
+        insertData.status_reason = result.reason;
+        insertData.dist_ema20_pct = parseFloat(result.diagnostics.distEma20Pct);
+        insertData.rsi_zone = result.diagnostics.rsiZone;
+        insertData.volume_state = result.diagnostics.volumeState;
+        insertData.time_warning = result.timeWarning;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('watchlist')
+      .insert([insertData])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "Already in watchlist" });
+      }
+      throw error;
+    }
+
+    res.status(201).json({ stock: data });
+  } catch (e) {
+    console.error("Add to watchlist error:", e);
+    res.status(500).json({ error: "Failed to add to watchlist" });
+  }
+});
+
+app.delete("/api/watchlist/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const { error } = await supabase
+      .from('watchlist')
+      .delete()
+      .eq('ticker', ticker.toUpperCase());
+
+    if (error) throw error;
+    res.status(204).send();
+  } catch (e) {
+    console.error("Delete from watchlist error:", e);
+    res.status(500).json({ error: "Failed to delete from watchlist" });
+  }
+});
+
+// POST /api/watchlist/update - Uppdatera alla watchlist-statusar (daglig batch)
+app.post("/api/watchlist/update", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase not configured" });
+  }
+
+  try {
+    const today = dayjs().format('YYYY-MM-DD');
+
+    const { data: watchlistStocks, error: fetchError } = await supabase
+      .from('watchlist')
+      .select('*');
+
+    if (fetchError) throw fetchError;
+
+    if (!watchlistStocks || watchlistStocks.length === 0) {
+      return res.json({ message: "No stocks in watchlist", updated: 0 });
+    }
+
+    const updates = [];
+
+    for (const stock of watchlistStocks) {
+      try {
+        const ticker = stock.ticker;
+
+        const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
+        let cachedData = await getMarketData(ticker, startDate);
+        const needsFetch = !cachedData || cachedData.length === 0 ||
+                          !cachedData.some(c => c.date === today);
+
+        let candles;
+        if (needsFetch) {
+          console.log(`[Watchlist Update] Fetching ${ticker}`);
+          const rawCandles = await yahooFinance.chart(ticker, {
+            period1: startDate,
+            period2: today
+          });
+
+          candles = rawCandles.quotes.map(q => ({
+            date: dayjs(q.date).format('YYYY-MM-DD'),
+            open: q.open,
+            high: q.high,
+            low: q.low,
+            close: q.close,
+            volume: q.volume
+          }));
+
+          await saveMarketData(ticker, candles);
+        } else {
+          candles = cachedData;
+        }
+
+        if (candles.length < 50) continue;
+
+        const closes = candles.map(c => c.close);
+        const highs = candles.map(c => c.high);
+        const lows = candles.map(c => c.low);
+        const volumes = candles.map(c => c.volume);
+
+        const ema20Result = EMA.calculate({ period: 20, values: closes });
+        const ema50Result = EMA.calculate({ period: 50, values: closes });
+        const rsi14Result = RSI.calculate({ period: 14, values: closes });
+
+        const ema20 = alignSeries(ema20Result, closes.length);
+        const ema50 = alignSeries(ema50Result, closes.length);
+        const rsi14 = alignSeries(rsi14Result, closes.length);
+
+        const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
+
+        const input = buildWatchlistInput(
+          ticker,
+          candles,
+          { ema20, ema50, rsi14, relativeVolume },
+          stock.current_status,
+          stock.added_at
+        );
+
+        const result = updateWatchlistStatus(input);
+
+        const { error: updateError } = await supabase
+          .from('watchlist')
+          .update({
+            last_updated: today,
+            current_status: result.status,
+            current_action: result.action,
+            status_reason: result.reason,
+            dist_ema20_pct: parseFloat(result.diagnostics.distEma20Pct),
+            rsi_zone: result.diagnostics.rsiZone,
+            volume_state: result.diagnostics.volumeState,
+            time_warning: result.timeWarning,
+            days_in_watchlist: input.daysInWatchlist
+          })
+          .eq('ticker', ticker);
+
+        if (!updateError) {
+          console.log(`[Watchlist Update] ✓ ${ticker} → ${result.status}`);
+          updates.push({
+            ticker,
+            status: result.status,
+            action: result.action
+          });
+        }
+
+      } catch (stockError) {
+        console.error(`[Watchlist Update] Error ${stock.ticker}:`, stockError.message);
+      }
+    }
+
+    res.json({
+      message: "Watchlist updated",
+      updated: updates.length,
+      total: watchlistStocks.length,
+      results: updates
+    });
+
+  } catch (e) {
+    console.error("Watchlist update error:", e);
+    res.status(500).json({ error: "Failed to update watchlist" });
+  }
+});
+
+// Portfolio endpoints
+app.get("/api/portfolio", async (req, res) => {
+  if (!supabase) {
+    return res.json({ stocks: [] });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('portfolio')
+      .select('*')
+      .order('added_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ stocks: data || [] });
+  } catch (e) {
+    console.error("Get portfolio error:", e);
+    res.status(500).json({ error: "Failed to fetch portfolio" });
+  }
+});
+
+app.post("/api/portfolio", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase not configured" });
+  }
+
+  try {
+    const { ticker, entryPrice, quantity } = req.body;
+    const { data, error } = await supabase
+      .from('portfolio')
+      .insert([{
+        ticker: ticker.toUpperCase(),
+        entry_price: entryPrice,
+        quantity: quantity
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "Already in portfolio" });
+      }
+      throw error;
+    }
+
+    res.status(201).json({ stock: data });
+  } catch (e) {
+    console.error("Add to portfolio error:", e);
+    res.status(500).json({ error: "Failed to add to portfolio" });
+  }
+});
+
+app.delete("/api/portfolio/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const { error } = await supabase
+      .from('portfolio')
+      .delete()
+      .eq('ticker', ticker.toUpperCase());
+
+    if (error) throw error;
+    res.status(204).send();
+  } catch (e) {
+    console.error("Delete from portfolio error:", e);
+    res.status(500).json({ error: "Failed to delete from portfolio" });
+  }
+});
+
+app.patch("/api/screener/stocks/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const { is_active } = req.body;
+
+    const { data, error } = await supabase
+      .from('screener_stocks')
+      .update({ is_active })
+      .eq('ticker', ticker.toUpperCase())
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ stock: data });
+  } catch (e) {
+    console.error("Update stock error:", e);
+    res.status(500).json({ error: "Failed to update stock" });
   }
 });
 

@@ -1,0 +1,112 @@
+
+> weekly-trading-ai@1.0.0 server
+> node server.js
+
+[yahoo-finance2] v2 is no longer maintained nor supported.  Please migrate to v3. See https://github.com/gadicc/yahoo-finance2/blob/dev/docs/UPGRADING.md for details.
+[dotenv@17.2.3] injecting env (3) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+🚀 Backend server running on http://localhost:3002
+Running fresh screener...
+Using 13 stocks from database
+Fetching fresh data for SAND.ST from Yahoo Finance...
+[Deprecated] historical() relies on an API that Yahoo have removed.  We'll map this request to chart() for convenience, but, please consider using chart() directly instead; for more info see https://github.com/gadicc/node-yahoo-finance2/issues/795.  This will only be shown once, but you can suppress this message in future with `yahooFinance.suppressNotices(['ripHistorical'])`.
+Fetching fresh data for ASSA-B.ST from Yahoo Finance...
+Fetching fresh data for ABB.ST from Yahoo Finance...
+Fetching fresh data for INVE-B.ST from Yahoo Finance...
+Fetching fresh data for VOLV-B.ST from Yahoo Finance...
+Fetching fresh data for ATCO-A.ST from Yahoo Finance...
+Fetching fresh data for ERIC-B.ST from Yahoo Finance...
+Fetching fresh data for ATCO-B.ST from Yahoo Finance...
+Fetching fresh data for SHB-A.ST from Yahoo Finance...
+Fetching fresh data for SWED-A.ST from Yahoo Finance...
+Fetching fresh data for INVE-A.ST from Yahoo Finance...
+Fetching fresh data for SKF-B.ST from Yahoo Finance...
+Fetching fresh data for SEB-A.ST from Yahoo Finance...
+Using cached screener data
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Using cached screener data
+Using cached screener data
+Using cached screener data
+Using cached screener data
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}
+Get portfolio events error: {
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.portfolio'",
+  message: "Could not find the table 'public.portfolio_events' in the schema cache"
+}

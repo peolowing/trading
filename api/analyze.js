@@ -14,6 +14,57 @@ const supabase = (supabaseUrl && supabaseKey)
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
+async function getBacktestResults(ticker, date, strategy) {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('backtest_results')
+      .select('*')
+      .eq('ticker', ticker)
+      .eq('analysis_date', date)
+      .eq('strategy', strategy)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error("Supabase backtest_results error:", error);
+      return null;
+    }
+
+    return data;
+  } catch (e) {
+    console.error("getBacktestResults error:", e);
+    return null;
+  }
+}
+
+async function saveBacktestResults(ticker, date, results) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase
+      .from('backtest_results')
+      .upsert({
+        ticker,
+        analysis_date: date,
+        strategy: results.strategy,
+        total_signals: results.totalSignals,
+        wins: results.wins,
+        losses: results.losses,
+        win_rate: results.winRate,
+        avg_win: results.avgWin,
+        avg_loss: results.avgLoss,
+        total_return: results.totalReturn,
+        max_drawdown: results.maxDrawdown,
+        sharpe_ratio: results.sharpeRatio,
+        trades_data: results.trades
+      }, { onConflict: 'ticker,analysis_date,strategy' });
+
+    if (error) console.error("Supabase backtest_results error:", error);
+  } catch (e) {
+    console.error("saveBacktestResults error:", e);
+  }
+}
+
 function alignSeries(series, totalLength) {
   const padding = totalLength - series.length;
   return Array(padding).fill(null).concat(series);
@@ -21,30 +72,168 @@ function alignSeries(series, totalLength) {
 
 function detectStrategy(indicators) {
   const { ema20, ema50, rsi14, relativeVolume, regime, close } = indicators;
-  
+
   if (!ema20 || !ema50 || !rsi14) return "Hold";
-  
+
   const priceAboveEMA20 = close > ema20;
   const priceAboveEMA50 = close > ema50;
   const ema20AboveEMA50 = ema20 > ema50;
-  
+
   if (regime === "Bullish Trend" && priceAboveEMA50 && !priceAboveEMA20 && rsi14 < 50) {
     return "Pullback";
   }
-  
+
   if (regime === "Consolidation" && relativeVolume > 1.5 && close > ema20) {
     return "Breakout";
   }
-  
+
   if (regime === "Bearish Trend" && rsi14 < 30 && relativeVolume > 1.3) {
     return "Reversal";
   }
-  
+
   if (regime === "Bullish Trend" && priceAboveEMA20 && ema20AboveEMA50 && rsi14 > 50 && rsi14 < 70) {
     return "Trend Following";
   }
-  
+
   return "Hold";
+}
+
+function runBacktest(candles, strategy) {
+  let trades = [];
+  let position = null;
+  let equity = 10000;
+  let peak = 10000;
+  let maxDrawdown = 0;
+  const returns = [];
+
+  for (let i = 50; i < candles.length; i++) {
+    const closes = candles.slice(0, i + 1).map(c => c.close);
+    const highs = candles.slice(0, i + 1).map(c => c.high);
+    const lows = candles.slice(0, i + 1).map(c => c.low);
+
+    if (closes.length < 50) continue;
+
+    const ema20Result = EMA.calculate({ period: 20, values: closes });
+    const ema50Result = EMA.calculate({ period: 50, values: closes });
+    const rsi14Result = RSI.calculate({ period: 14, values: closes });
+    const atr14Result = ATR.calculate({
+      high: highs,
+      low: lows,
+      close: closes,
+      period: 14
+    });
+
+    const ema20 = ema20Result[ema20Result.length - 1];
+    const ema50 = ema50Result[ema50Result.length - 1];
+    const rsi14 = rsi14Result[rsi14Result.length - 1];
+    const atr14 = atr14Result[atr14Result.length - 1];
+
+    const current = candles[i];
+    const avgVolume = candles.slice(Math.max(0, i - 20), i).reduce((sum, c) => sum + c.volume, 0) / 20;
+    const relativeVolume = avgVolume > 0 ? current.volume / avgVolume : 1;
+
+    let regime = "Consolidation";
+    if (ema20 > ema50 && current.close > ema20) regime = "Bullish Trend";
+    else if (ema20 < ema50 && current.close < ema20) regime = "Bearish Trend";
+
+    const indicators = {
+      ema20,
+      ema50,
+      rsi14,
+      relativeVolume,
+      regime,
+      close: current.close,
+      high: current.high,
+      low: current.low
+    };
+
+    const detectedStrategy = detectStrategy(indicators);
+    const signal = detectedStrategy === strategy ? "BUY" : "HOLD";
+
+    if (!position && signal === "BUY") {
+      const shares = Math.floor(equity / current.close);
+      if (shares > 0) {
+        position = {
+          entryPrice: current.close,
+          shares,
+          entryDate: current.date,
+          stopLoss: current.close - 2 * atr14
+        };
+      }
+    }
+
+    if (position) {
+      if (current.low <= position.stopLoss || rsi14 > 70) {
+        const exitPrice = current.low <= position.stopLoss ? position.stopLoss : current.close;
+        const profit = (exitPrice - position.entryPrice) * position.shares;
+        equity += profit;
+        const returnPct = (profit / (position.entryPrice * position.shares)) * 100;
+
+        trades.push({
+          entry: position.entryDate,
+          exit: current.date,
+          entryPrice: position.entryPrice,
+          exitPrice,
+          shares: position.shares,
+          profit,
+          returnPct
+        });
+
+        returns.push(returnPct / 100);
+        position = null;
+
+        if (equity > peak) peak = equity;
+        const drawdown = ((peak - equity) / peak) * 100;
+        if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+      }
+    }
+  }
+
+  if (position && candles.length > 0) {
+    const lastCandle = candles[candles.length - 1];
+    const profit = (lastCandle.close - position.entryPrice) * position.shares;
+    equity += profit;
+    const returnPct = (profit / (position.entryPrice * position.shares)) * 100;
+
+    trades.push({
+      entry: position.entryDate,
+      exit: lastCandle.date,
+      entryPrice: position.entryPrice,
+      exitPrice: lastCandle.close,
+      shares: position.shares,
+      profit,
+      returnPct
+    });
+
+    returns.push(returnPct / 100);
+  }
+
+  const wins = trades.filter(t => t.profit > 0);
+  const losses = trades.filter(t => t.profit <= 0);
+  const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : 0;
+  const avgWin = wins.length > 0 ? wins.reduce((sum, t) => sum + t.returnPct, 0) / wins.length : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((sum, t) => sum + t.returnPct, 0) / losses.length : 0;
+  const totalReturn = ((equity - 10000) / 10000) * 100;
+
+  const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+  const stdDev = returns.length > 0
+    ? Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length)
+    : 0;
+  const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0;
+
+  return {
+    strategy,
+    totalSignals: trades.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate,
+    avgWin,
+    avgLoss,
+    totalReturn,
+    maxDrawdown,
+    sharpeRatio,
+    trades
+  };
 }
 
 export default async function handler(req, res) {
@@ -74,13 +263,60 @@ export default async function handler(req, res) {
 
         if (dbCached && dbCached.candles) {
           console.log(`[DB Cache HIT] ${ticker}`);
+
+          const indicators = dbCached.indicators_data;
+
+          // Calculate edge score
+          const regime = indicators.regime;
+          const setup = indicators.setup;
+          const rsi14 = indicators.rsi14;
+          const relativeVolume = indicators.relativeVolume;
+
+          let edgeScore = 5;
+          if (regime === "Bullish Trend") edgeScore += 2;
+          else if (regime === "Bearish Trend") edgeScore -= 2;
+          if (rsi14 >= 40 && rsi14 <= 60) edgeScore += 1;
+          if (rsi14 < 30 || rsi14 > 70) edgeScore -= 1;
+          if (relativeVolume > 1.5) edgeScore += 1;
+          if (relativeVolume < 0.8) edgeScore -= 0.5;
+          if (setup !== "Hold") edgeScore += 0.5;
+
+          const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+
+          const scoring = {
+            score: finalEdgeScore,
+            label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+          };
+
+          // Run backtest if setup is not Hold
+          let backtestResult = null;
+          if (setup !== "Hold") {
+            const cached = await getBacktestResults(ticker, today, setup);
+            if (cached) {
+              backtestResult = {
+                strategy: setup,
+                stats: {
+                  trades: cached.total_signals,
+                  winRate: cached.win_rate,
+                  totalReturn: cached.total_return,
+                  avgWin: cached.avg_win,
+                  avgLoss: cached.avg_loss,
+                  expectancy: cached.avg_win * (cached.win_rate / 100) + cached.avg_loss * (1 - cached.win_rate / 100)
+                },
+                currentPosition: null
+              };
+            }
+          }
+
           return res.json({
             candles: dbCached.candles,
             ema20: dbCached.ema20_series,
             ema50: dbCached.ema50_series,
             rsi14: dbCached.rsi14_series,
             atr14: dbCached.atr14_series,
-            indicators: dbCached.indicators_data
+            indicators,
+            scoring,
+            backtest: backtestResult
           });
         }
       } catch (e) {
@@ -182,6 +418,62 @@ export default async function handler(req, res) {
       setup
     };
 
+    // Calculate edge score (0-10 scale)
+    let edgeScore = 5;
+    if (regime === "Bullish Trend") edgeScore += 2;
+    else if (regime === "Bearish Trend") edgeScore -= 2;
+    if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
+    if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
+    if (relativeVolume > 1.5) edgeScore += 1;
+    if (relativeVolume < 0.8) edgeScore -= 0.5;
+    if (setup !== "Hold") edgeScore += 0.5;
+
+    const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+
+    const scoring = {
+      score: finalEdgeScore,
+      label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+    };
+
+    // Run backtest with detected strategy
+    let backtestResult = null;
+
+    if (ticker && setup !== "Hold") {
+      // Try to get cached backtest results first
+      const cached = await getBacktestResults(ticker, today, setup);
+      if (cached) {
+        backtestResult = {
+          strategy: setup,
+          stats: {
+            trades: cached.total_signals,
+            winRate: cached.win_rate,
+            totalReturn: cached.total_return,
+            avgWin: cached.avg_win,
+            avgLoss: cached.avg_loss,
+            expectancy: cached.avg_win * (cached.win_rate / 100) + cached.avg_loss * (1 - cached.win_rate / 100)
+          },
+          currentPosition: null
+        };
+      } else {
+        // Run fresh backtest
+        const bt = runBacktest(candles, setup);
+        await saveBacktestResults(ticker, today, bt);
+
+        backtestResult = {
+          strategy: setup,
+          stats: {
+            trades: bt.totalSignals,
+            winRate: bt.winRate,
+            totalReturn: bt.totalReturn,
+            avgWin: bt.avgWin,
+            avgLoss: bt.avgLoss,
+            expectancy: bt.winRate > 0 ? (bt.avgWin * bt.winRate / 100) + (bt.avgLoss * (1 - bt.winRate / 100)) : 0
+          },
+          currentPosition: null
+        };
+      }
+    }
+
     // Only send last 6 months of candles to reduce response size
     const sixMonthsAgo = dayjs().subtract(6, 'month').format('YYYY-MM-DD');
     const recentCandles = candles.filter(c => c.date >= sixMonthsAgo);
@@ -196,7 +488,9 @@ export default async function handler(req, res) {
       ema50: ema50.slice(startIndex),
       rsi14: rsi14.slice(startIndex),
       atr14: atr14.slice(startIndex),
-      indicators
+      indicators,
+      scoring,
+      backtest: backtestResult
     };
 
     // Save to Supabase cache (persistent)

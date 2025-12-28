@@ -28,15 +28,83 @@ ON indicators(ticker, date);
 -- Skapa tabell för AI-analys cache
 CREATE TABLE IF NOT EXISTS ai_analysis (
   ticker TEXT NOT NULL,
-  date DATE NOT NULL,
-  analysis TEXT NOT NULL,
+  analysis_date DATE NOT NULL,
+  analysis_text TEXT NOT NULL,
+  edge_score DECIMAL(3, 1),
+  edge_label TEXT,
+  win_rate DECIMAL(5, 4),
+  total_return DECIMAL(7, 4),
+  trades_count INTEGER,
   created_at TIMESTAMP DEFAULT NOW(),
-  PRIMARY KEY (ticker, date)
+  PRIMARY KEY (ticker, analysis_date)
 );
 
 -- Index för AI-analys
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_ticker_date
-ON ai_analysis(ticker, date);
+ON ai_analysis(ticker, analysis_date);
+
+-- Skapa tabell för bevakningslista (watchlist)
+CREATE TABLE IF NOT EXISTS watchlist (
+  ticker TEXT PRIMARY KEY,
+  added_at TIMESTAMP DEFAULT NOW(),
+
+  -- Initial snapshot när aktien lades till
+  initial_price DECIMAL(10, 2),
+  initial_ema20 DECIMAL(10, 2),
+  initial_ema50 DECIMAL(10, 2),
+  initial_rsi14 DECIMAL(5, 2),
+  initial_regime TEXT,
+  initial_setup TEXT,
+
+  -- Senaste dagliga uppdatering
+  last_updated DATE,
+  current_status TEXT DEFAULT 'WAIT_PULLBACK',
+  current_action TEXT DEFAULT 'WAIT',
+  status_reason TEXT,
+
+  -- Diagnostics från senaste uppdatering
+  dist_ema20_pct DECIMAL(6, 2),
+  rsi_zone TEXT,
+  volume_state TEXT,
+  time_warning TEXT,
+
+  -- Räknare
+  days_in_watchlist INTEGER DEFAULT 0,
+
+  -- Extra metadata
+  notes TEXT
+);
+
+-- Skapa tabell för förvaltningslista (portfolio)
+CREATE TABLE IF NOT EXISTS portfolio (
+  ticker TEXT PRIMARY KEY,
+  entry_price DECIMAL(10, 2),
+  quantity INTEGER,
+  added_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Skapa tabell för backtest-resultat
+CREATE TABLE IF NOT EXISTS backtest_results (
+  ticker TEXT NOT NULL,
+  analysis_date DATE NOT NULL,
+  strategy TEXT NOT NULL,
+  total_signals INTEGER,
+  wins INTEGER,
+  losses INTEGER,
+  win_rate DECIMAL(6, 2),
+  avg_win DECIMAL(10, 2),
+  avg_loss DECIMAL(10, 2),
+  total_return DECIMAL(10, 2),
+  max_drawdown DECIMAL(10, 2),
+  sharpe_ratio DECIMAL(10, 4),
+  trades_data JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (ticker, analysis_date, strategy)
+);
+
+-- Index för backtest-resultat
+CREATE INDEX IF NOT EXISTS idx_backtest_results_ticker_date
+ON backtest_results(ticker, analysis_date);
 ```
 
 ## Steg 3: Klicka "Run" för att köra SQL

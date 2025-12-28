@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import EntryModal from "./EntryModal";
 
-export default function Dashboard({ onSelectStock, onNavigate }) {
+export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition }) {
   const [watchlist, setWatchlist] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
   const [screenerData, setScreenerData] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
   const [customInput, setCustomInput] = useState("");
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
 
   useEffect(() => {
     loadWatchlist();
@@ -104,6 +107,38 @@ export default function Dashboard({ onSelectStock, onNavigate }) {
       await loadPortfolio();
     } catch (e) {
       console.error("Remove from portfolio error:", e);
+    }
+  }
+
+  async function handleAddToPortfolio(entryData) {
+    try {
+      const res = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entryData)
+      });
+
+      if (res.ok) {
+        // Close modal
+        setShowEntryModal(false);
+        setSelectedStock(null);
+
+        // Refresh portfolio
+        await loadPortfolio();
+
+        // Optional: Navigate to Position Detail
+        if (onOpenPosition) {
+          onOpenPosition(entryData.ticker);
+        }
+
+        alert(`✅ ${entryData.ticker} tillagd i portfolio!`);
+      } else {
+        const error = await res.json();
+        alert(`❌ Kunde inte lägga till: ${error.error || 'Okänt fel'}`);
+      }
+    } catch (e) {
+      console.error('Add to portfolio error:', e);
+      alert(`❌ Fel: ${e.message}`);
     }
   }
 
@@ -338,6 +373,25 @@ export default function Dashboard({ onSelectStock, onNavigate }) {
                         {/* Action Buttons */}
                         <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button
+                              className="action-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedStock(item);
+                                setShowEntryModal(true);
+                              }}
+                              title={isReady ? "Lägg till i portfolio" : "Lägg till i portfolio (diskretionär entry)"}
+                              style={{
+                                background: isReady ? "#16a34a" : "#3b82f6",
+                                border: isReady ? "1px solid #15803d" : "1px solid #2563eb",
+                                color: "white",
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                padding: "4px 10px"
+                              }}
+                            >
+                              KÖP
+                            </button>
                             {isReady && (
                               <button
                                 className="action-btn"
@@ -472,6 +526,7 @@ export default function Dashboard({ onSelectStock, onNavigate }) {
                           cursor: "pointer",
                           transition: "all 0.15s"
                         }}
+                        onClick={() => onOpenPosition && onOpenPosition(item.ticker)}
                         onMouseEnter={(e) => {
                           if (!isExit) e.currentTarget.style.background = "#f8fafc";
                         }}
@@ -480,47 +535,47 @@ export default function Dashboard({ onSelectStock, onNavigate }) {
                         }}
                       >
                         {/* Status Icon */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <span style={{ fontSize: "20px" }}>{statusIcon}</span>
                         </td>
 
                         {/* Aktie */}
-                        <td style={{ padding: "10px 12px" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px" }}>
                           <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
                         </td>
 
                         {/* Pris */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                           {currentPrice ? currentPrice.toFixed(2) : "—"}
                         </td>
 
                         {/* Entry */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
                           {item.entry_price ? item.entry_price.toFixed(2) : "—"}
                         </td>
 
                         {/* PnL % */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: pnlColor, fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
                           {pnlPct !== null && pnlPct !== undefined ? `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(1)}%` : "—"}
                         </td>
 
                         {/* R-multiple */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: rColor, fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: rColor, fontVariantNumeric: "tabular-nums" }}>
                           {rMultiple !== null && rMultiple !== undefined ? `${rMultiple > 0 ? '+' : ''}${rMultiple.toFixed(1)}R` : "—"}
                         </td>
 
                         {/* Stop */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
                           {item.current_stop ? item.current_stop.toFixed(2) : item.initial_stop?.toFixed(2) || "—"}
                         </td>
 
                         {/* Target */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
                           {item.initial_target ? item.initial_target.toFixed(2) : "—"}
                         </td>
 
                         {/* Trailing Type */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <span style={{
                             fontSize: "11px",
                             fontWeight: "600",
@@ -534,7 +589,7 @@ export default function Dashboard({ onSelectStock, onNavigate }) {
                         </td>
 
                         {/* Dagar */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
                             {item.days_in_trade || 0}d
                           </span>
@@ -754,6 +809,18 @@ export default function Dashboard({ onSelectStock, onNavigate }) {
           </>
         )}
       </div>
+
+      {/* Entry Modal */}
+      {showEntryModal && selectedStock && (
+        <EntryModal
+          stock={selectedStock}
+          onClose={() => {
+            setShowEntryModal(false);
+            setSelectedStock(null);
+          }}
+          onConfirm={handleAddToPortfolio}
+        />
+      )}
     </div>
   );
 }

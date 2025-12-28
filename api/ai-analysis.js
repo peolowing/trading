@@ -31,14 +31,14 @@ export default async function handler(req, res) {
       try {
         const { data: cached } = await supabase
           .from('ai_analysis')
-          .select('analysis')
+          .select('analysis_text')
           .eq('ticker', ticker)
-          .eq('date', today)
+          .eq('analysis_date', today)
           .maybeSingle();
 
-        if (cached && cached.analysis) {
+        if (cached && cached.analysis_text) {
           console.log(`[AI Cache HIT] ${ticker}`);
-          return res.json({ analysis: cached.analysis });
+          return res.json({ analysis: cached.analysis_text });
         }
       } catch (e) {
         console.warn(`[AI Cache Check] ${e.message}`);
@@ -72,9 +72,9 @@ export default async function handler(req, res) {
           .from('ai_analysis')
           .upsert({
             ticker,
-            date: today,
-            analysis
-          }, { onConflict: 'ticker,date' });
+            analysis_date: today,
+            analysis_text: analysis
+          }, { onConflict: 'ticker,analysis_date' });
         console.log(`[AI Cache SAVED] ${ticker}`);
       } catch (e) {
         console.warn(`[AI Cache Save Failed] ${e.message}`);

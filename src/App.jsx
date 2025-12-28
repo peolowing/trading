@@ -12,38 +12,22 @@ import {
 import TradeChart from "./components/TradeChart";
 import TradeJournal from "./components/TradeJournal";
 import ScreenerAdmin from "./components/ScreenerAdmin";
-
-const STOCKS = [
-  { symbol: "AAPL", name: "Apple" },
-  { symbol: "MSFT", name: "Microsoft" },
-  { symbol: "GOOGL", name: "Google" },
-  { symbol: "TSLA", name: "Tesla" },
-  { symbol: "NVDA", name: "NVIDIA" },
-  { symbol: "VOLV-B.ST", name: "Volvo B" },
-  { symbol: "ERIC-B.ST", name: "Ericsson B" },
-  { symbol: "ABB.ST", name: "ABB" },
-  { symbol: "SAND.ST", name: "Sandvik" },
-  { symbol: "HM-B.ST", name: "H&M" }
-];
+import Dashboard from "./components/Dashboard";
+import PositionDetail from "./components/PositionDetail";
 
 export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [learnMode, setLearnMode] = useState(false);
-  const [selectedStock, setSelectedStock] = useState("AAPL");
-  const [customInput, setCustomInput] = useState("");
-  const [screenerData, setScreenerData] = useState(null);
-  const [screenerLoading, setScreenerLoading] = useState(false);
-  const [currentView, setCurrentView] = useState("analysis"); // "analysis", "journal", or "screener-admin"
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "journal", "screener-admin", or "position-detail"
 
   useEffect(() => {
-    loadData();
+    if (selectedStock) {
+      loadData();
+    }
   }, [selectedStock]);
-
-  useEffect(() => {
-    loadScreener();
-  }, []);
 
   async function loadScreener() {
     setScreenerLoading(true);
@@ -107,16 +91,44 @@ export default function App() {
     return data.candles.slice(-90).map(c => ({ date: c.date, close: c.close }));
   }, [data]);
 
+  // Render Dashboard as default view
+  if (currentView === "dashboard") {
+    return (
+      <Dashboard
+        onSelectStock={(ticker) => {
+          setSelectedStock(ticker);
+          setCurrentView("analysis");
+        }}
+        onNavigate={(view) => setCurrentView(view)}
+        onOpenPosition={(ticker) => {
+          setSelectedStock(ticker);
+          setCurrentView("position-detail");
+        }}
+      />
+    );
+  }
+
+  // Render Position Detail if that view is selected
+  if (currentView === "position-detail") {
+    return (
+      <PositionDetail
+        ticker={selectedStock}
+        onBack={() => setCurrentView("dashboard")}
+      />
+    );
+  }
+
   // Render Trade Journal if that view is selected
   if (currentView === "journal") {
-    return <TradeJournal onNavigate={() => setCurrentView("analysis")} />;
+    return <TradeJournal onNavigate={() => setCurrentView("dashboard")} />;
   }
 
   // Render Screener Admin if that view is selected
   if (currentView === "screener-admin") {
-    return <ScreenerAdmin onNavigate={() => setCurrentView("analysis")} />;
+    return <ScreenerAdmin onNavigate={() => setCurrentView("dashboard")} />;
   }
 
+  // Analysis view - shown when a stock is selected
   if (loading || !data) return (
     <div className="container">
       <div className="loading">
@@ -133,6 +145,7 @@ export default function App() {
       <div className="container">
         <p>{error}</p>
         <button onClick={loadData}>Försök igen</button>
+        <button onClick={() => setCurrentView("dashboard")}>← Tillbaka till Dashboard</button>
       </div>
     );
   }
@@ -168,15 +181,12 @@ export default function App() {
     <div className="container">
       <header className="header">
         <div>
-          <p className="eyebrow">Veckotrading AI</p>
-          <h1>📊 Edge-koll för {STOCKS.find(s => s.symbol === selectedStock)?.name || selectedStock}</h1>
+          <p className="eyebrow">Analys</p>
+          <h1>📊 {selectedStock}</h1>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className="ghost" onClick={() => setCurrentView("screener-admin")}>
-            ⚙️ Screener
-          </button>
-          <button className="ghost" onClick={() => setCurrentView("journal")}>
-            📔 Handelsjournal
+          <button className="ghost" onClick={() => setCurrentView("dashboard")}>
+            ← Dashboard
           </button>
           <button className="ghost" onClick={() => setLearnMode(v => !v)}>
             {learnMode ? "Stäng lär-läge" : "Lär-läge"}
@@ -186,81 +196,50 @@ export default function App() {
 
       <div className="card" style={{ marginBottom: "16px" }}>
         <div className="card-header">
-          <p className="eyebrow">Top 10 Svenska Aktier – Ranking</p>
-          <span className="tag">Uppdateras dagligen</span>
+          <p className="eyebrow">Åtgärder</p>
+          <span className="tag">Spara eller Bevaka</span>
         </div>
-        {screenerLoading && <p style={{ color: "#64748b", fontSize: "14px" }}>Laddar screener...</p>}
-        {screenerData && screenerData.length > 0 && (
-          <>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "12px", fontSize: "12px" }}>
-              <span className="pill green">● Bullish + Setup</span>
-              <span className="pill yellow">● Bullish eller Setup</span>
-              <span className="pill red">● Ingen signal</span>
-            </div>
-            <ul className="screener-list">
-              {screenerData.slice(0, 10).map((item, idx) => {
-                // Calculate color based on edge score
-                const edgeScore = item.edgeScore || 5;
-                let colorClass = "red";
-                if (edgeScore >= 7) colorClass = "green";
-                else if (edgeScore >= 5) colorClass = "yellow";
-
-                // Display edge score value
-                const scoreValue = item.edgeScore?.toFixed(1) || "N/A";
-
-                return (
-                  <li key={item.ticker} className="screener-row">
-                    <span className="rank">#{idx + 1}</span>
-                    <button
-                      className="ticker-link"
-                      onClick={() => setSelectedStock(item.ticker)}
-                    >
-                      {item.ticker}
-                    </button>
-                    <span className={`score ${colorClass}`}>{scoreValue}</span>
-                    <span className="meta">
-                      {item.regime === "Bullish Trend" ? "↑" : item.regime === "Bearish Trend" ? "↓" : "→"} RSI {item.rsi?.toFixed(0) || "N/A"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </div>
-
-      <div className="card" style={{ marginBottom: "16px" }}>
-        <p className="eyebrow" style={{ marginBottom: "12px" }}>Välj eller sök aktie</p>
-
-        <div style={{ marginBottom: "12px" }}>
-          <form onSubmit={(e) => { e.preventDefault(); if (customInput.trim()) setSelectedStock(customInput.trim().toUpperCase()); }}>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <input
-                type="text"
-                placeholder="Skriv aktiesymbol (t.ex. AAPL, TSLA, VOLV-B.ST)"
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                className="stock-input"
-              />
-              <button type="submit" className="ghost" disabled={!customInput.trim()}>
-                Sök
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <p className="eyebrow" style={{ marginBottom: "8px", marginTop: "16px" }}>Populära aktier</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "8px" }}>
-          {STOCKS.map(stock => (
-            <button
-              key={stock.symbol}
-              className={selectedStock === stock.symbol ? "stock-btn active" : "stock-btn"}
-              onClick={() => setSelectedStock(stock.symbol)}
-            >
-              <strong>{stock.symbol}</strong>
-              <small>{stock.name}</small>
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            className="ghost"
+            style={{ background: "#dbeafe", borderColor: "#93c5fd" }}
+            onClick={async () => {
+              try {
+                await fetch("/api/watchlist", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ticker: selectedStock })
+                });
+                alert(`${selectedStock} tillagd i bevakningslistan!`);
+              } catch (e) {
+                alert("Kunde inte lägga till i bevakningslistan");
+              }
+            }}
+          >
+            ⭐ Lägg till i Bevakningslista
+          </button>
+          <button
+            className="ghost"
+            style={{ background: "#dcfce7", borderColor: "#86efac" }}
+            onClick={() => {
+              const entryPrice = prompt(`Köppris för ${selectedStock}:`);
+              const quantity = prompt(`Antal aktier:`);
+              if (entryPrice && quantity) {
+                fetch("/api/portfolio", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    ticker: selectedStock,
+                    entryPrice: parseFloat(entryPrice),
+                    quantity: parseInt(quantity)
+                  })
+                }).then(() => alert(`${selectedStock} tillagd i förvaltningslistan!`))
+                .catch(() => alert("Kunde inte lägga till i förvaltningslistan"));
+              }
+            }}
+          >
+            💼 Lägg till i Förvaltningslista
+          </button>
         </div>
       </div>
 
@@ -340,32 +319,75 @@ export default function App() {
       </div>
 
       <div className="grid">
-        <div className="card">
-          <div className="stat-row">
-            <div>
-              <p className="eyebrow">RSI 14</p>
-              <strong>{indicators?.rsi14?.toFixed(1) || "N/A"}</strong>
+        <div>
+          <div className="card" style={{ marginBottom: "16px" }}>
+            <div className="stat-row">
+              <div>
+                <p className="eyebrow">RSI 14</p>
+                <strong>{indicators?.rsi14?.toFixed(1) || "N/A"}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">ATR 14</p>
+                <strong>{indicators?.atr14?.toFixed(2) || "N/A"}</strong>
+              </div>
             </div>
-            <div>
-              <p className="eyebrow">ATR 14</p>
-              <strong>{indicators?.atr14?.toFixed(2) || "N/A"}</strong>
+            <div className="stat-row">
+              <div>
+                <p className="eyebrow">EMA20</p>
+                <strong>{indicators?.ema20?.toFixed(2) || "N/A"}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">EMA50</p>
+                <strong>{indicators?.ema50?.toFixed(2) || "N/A"}</strong>
+              </div>
             </div>
+            {learnMode && (
+              <p className="note">
+                Edge-score mäter trend (EMA20/EMA50), RSI sweet spot, volym och backtest-resultat.
+              </p>
+            )}
           </div>
-          <div className="stat-row">
-            <div>
-              <p className="eyebrow">EMA20</p>
-              <strong>{indicators?.ema20?.toFixed(2) || "N/A"}</strong>
+
+          <div className="card">
+            <div className="card-header">
+              <p className="eyebrow">Backtest</p>
+              <span className="tag">Pullback-strategi</span>
             </div>
-            <div>
-              <p className="eyebrow">EMA50</p>
-              <strong>{indicators?.ema50?.toFixed(2) || "N/A"}</strong>
+            <div className="stat-row">
+              <div>
+                <p className="eyebrow">Total avkastning</p>
+                <strong>{stats.totalReturn.toFixed(1)}%</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Win rate</p>
+                <strong>{stats.winRate.toFixed(1)}%</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Trades</p>
+                <strong>{stats.trades}</strong>
+              </div>
             </div>
+            <div className="stat-row">
+              <div>
+                <p className="eyebrow">Expectancy</p>
+                <strong>{(stats.expectancy * 100).toFixed(2)}%</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Snittvinst</p>
+                <strong>{stats.avgWin.toFixed(2)}%</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Snittförlust</p>
+                <strong>{stats.avgLoss.toFixed(2)}%</strong>
+              </div>
+            </div>
+            {learnMode && (
+              <p className="note">
+                Backtestet köper i upptrend när RSI 40–55 och priset ligger över EMA20/50 med ATR-baserad stop loss.
+                Exit sker vid stop, trendbrott, RSI &gt; 70 eller efter 10 dagar.
+              </p>
+            )}
           </div>
-          {learnMode && (
-            <p className="note">
-              Edge-score mäter trend (EMA20/EMA50), RSI sweet spot, volym och backtest-resultat.
-            </p>
-          )}
         </div>
 
         <div className="card chart-card">
@@ -417,80 +439,37 @@ export default function App() {
         </div>
       </div>
 
-      <div className="grid">
-        <div className="card">
-          <div className="card-header">
-            <p className="eyebrow">Backtest</p>
-            <span className="tag">Pullback-strategi</span>
-          </div>
-          <div className="stat-row">
-            <div>
-              <p className="eyebrow">Total avkastning</p>
-              <strong>{(stats.totalReturn * 100).toFixed(1)}%</strong>
-            </div>
-            <div>
-              <p className="eyebrow">Win rate</p>
-              <strong>{(stats.winRate * 100).toFixed(1)}%</strong>
-            </div>
-            <div>
-              <p className="eyebrow">Trades</p>
-              <strong>{stats.trades}</strong>
-            </div>
-          </div>
-          <div className="stat-row">
-            <div>
-              <p className="eyebrow">Expectancy</p>
-              <strong>{(stats.expectancy * 100).toFixed(2)}%</strong>
-            </div>
-            <div>
-              <p className="eyebrow">Snittvinst</p>
-              <strong>{(stats.avgWin * 100).toFixed(2)}%</strong>
-            </div>
-            <div>
-              <p className="eyebrow">Snittförlust</p>
-              <strong>{(stats.avgLoss * 100).toFixed(2)}%</strong>
-            </div>
-          </div>
-          {learnMode && (
-            <p className="note">
-              Backtestet köper i upptrend när RSI 40–55 och priset ligger över EMA20/50 med ATR-baserad stop loss.
-              Exit sker vid stop, trendbrott, RSI &gt; 70 eller efter 10 dagar.
-            </p>
-          )}
+      <div className="card">
+        <div className="card-header">
+          <p className="eyebrow">AI-bedömning</p>
+          <span className="tag">GPT-4o-mini</span>
         </div>
-
-        <div className="card">
-          <div className="card-header">
-            <p className="eyebrow">AI-bedömning</p>
-            <span className="tag">GPT-4o-mini</span>
-          </div>
-          <div className="ai-analysis">
-            {ai?.split('\n').map((line, i) => {
-              // Handle ## markdown headings
-              if (line.startsWith('## ')) {
-                return <h3 key={i} className="ai-heading">{line.substring(3).trim()}</h3>;
-              }
-              // Handle **bold** headings (old format)
-              else if (line.startsWith('**') && line.endsWith('**')) {
-                return <h3 key={i} className="ai-heading">{line.replace(/\*\*/g, '')}</h3>;
-              }
-              // Handle bullet points
-              else if (line.startsWith('•') || line.trim().startsWith('•')) {
-                return <li key={i} className="ai-bullet">{line.replace('•', '').trim()}</li>;
-              }
-              // Handle other text
-              else if (line.trim()) {
-                return <p key={i} className="ai-text">{line}</p>;
-              }
-              return null;
-            })}
-          </div>
-          {learnMode && (
-            <p className="note">
-              AI sammanfattar analysen och ska tolkas som stöd – inte signal – och fungerar bäst ihop med backtestet.
-            </p>
-          )}
+        <div className="ai-analysis">
+          {ai?.split('\n').map((line, i) => {
+            // Handle ## markdown headings
+            if (line.startsWith('## ')) {
+              return <h3 key={i} className="ai-heading">{line.substring(3).trim()}</h3>;
+            }
+            // Handle **bold** headings (old format)
+            else if (line.startsWith('**') && line.endsWith('**')) {
+              return <h3 key={i} className="ai-heading">{line.replace(/\*\*/g, '')}</h3>;
+            }
+            // Handle bullet points
+            else if (line.startsWith('•') || line.trim().startsWith('•')) {
+              return <li key={i} className="ai-bullet">{line.replace('•', '').trim()}</li>;
+            }
+            // Handle other text
+            else if (line.trim()) {
+              return <p key={i} className="ai-text">{line}</p>;
+            }
+            return null;
+          })}
         </div>
+        {learnMode && (
+          <p className="note">
+            AI sammanfattar analysen och ska tolkas som stöd – inte signal – och fungerar bäst ihop med backtestet.
+          </p>
+        )}
       </div>
     </div>
   );
