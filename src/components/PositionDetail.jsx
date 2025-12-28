@@ -377,48 +377,89 @@ export default function PositionDetail({ ticker, onBack }) {
       {/* ============================================ */}
       {/* 1️⃣ HEADER - POSITION SNAPSHOT */}
       {/* ============================================ */}
-      <header className="header" style={{ marginBottom: "24px" }}>
-        <div>
+      <header className="header" style={{
+        marginBottom: "24px",
+        flexDirection: "column",
+        gap: "16px"
+      }}>
+        <div style={{ width: "100%" }}>
           <p className="eyebrow">Position Detail</p>
-          <h1 style={{ fontSize: "32px", margin: "8px 0", display: "flex", alignItems: "center", gap: "12px" }}>
+          <h1 style={{
+            fontSize: "clamp(24px, 5vw, 32px)",
+            margin: "8px 0",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap"
+          }}>
             {ticker}
-            <span style={{ fontSize: "28px" }}>{statusIcon}</span>
-            <span style={{ fontSize: "18px", fontWeight: "600", color: "#64748b" }}>{statusLabel}</span>
+            <span style={{ fontSize: "clamp(20px, 4vw, 28px)" }}>{statusIcon}</span>
+            <span style={{
+              fontSize: "clamp(14px, 3vw, 18px)",
+              fontWeight: "600",
+              color: "#64748b"
+            }}>
+              {statusLabel}
+            </span>
           </h1>
 
-          {/* Compact metrics */}
-          <div style={{ display: "flex", gap: "24px", marginTop: "12px", fontSize: "16px", fontWeight: "600" }}>
+          {/* Compact metrics - Responsive grid */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
+            gap: "12px",
+            marginTop: "12px",
+            fontSize: "14px",
+            fontWeight: "600"
+          }}>
             <div>
-              <span style={{ color: "#64748b", fontSize: "12px", marginRight: "6px" }}>R:</span>
+              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>R:</span>
               <span style={{ color: rColor, fontVariantNumeric: "tabular-nums" }}>
                 {rMultiple > 0 ? '+' : ''}{rMultiple.toFixed(1)}R
               </span>
             </div>
             <div>
-              <span style={{ color: "#64748b", fontSize: "12px", marginRight: "6px" }}>PnL:</span>
+              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>PnL:</span>
               <span style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
                 {pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
               </span>
             </div>
             <div>
-              <span style={{ color: "#64748b", fontSize: "12px", marginRight: "6px" }}>Dagar:</span>
+              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>Dagar:</span>
               <span style={{ color: "#0f172a" }}>{daysInTrade}d</span>
             </div>
             {position.entry_date && (
               <div>
-                <span style={{ color: "#64748b", fontSize: "12px", marginRight: "6px" }}>Entry:</span>
-                <span style={{ color: "#0f172a" }}>{position.entry_date}</span>
+                <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>Entry:</span>
+                <span style={{ color: "#0f172a", fontSize: "12px" }}>{position.entry_date}</span>
               </div>
             )}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button className="ghost" onClick={onBack}>← Dashboard</button>
+        <div style={{
+          display: "flex",
+          gap: "8px",
+          width: "100%",
+          flexWrap: "wrap"
+        }}>
+          <button
+            className="ghost"
+            onClick={onBack}
+            style={{ flex: "1 1 auto", minWidth: "120px" }}
+          >
+            ← Dashboard
+          </button>
           {!isExited && (
             <button
               className="ghost"
-              style={{ background: "#dc2626", color: "white", borderColor: "#dc2626" }}
+              style={{
+                background: "#dc2626",
+                color: "white",
+                borderColor: "#dc2626",
+                flex: "1 1 auto",
+                minWidth: "120px"
+              }}
               onClick={() => setShowExitForm(!showExitForm)}
             >
               {showExitForm ? "Stäng Exit" : "Exit Position"}
@@ -641,23 +682,26 @@ export default function PositionDetail({ ticker, onBack }) {
                         autoFocus
                         style={{
                           width: "100px",
-                          padding: "4px 8px",
+                          padding: "8px 12px",
                           border: "2px solid #3b82f6",
                           borderRadius: "4px",
-                          fontSize: "14px",
-                          fontWeight: "600"
+                          fontSize: "16px",
+                          fontWeight: "600",
+                          minHeight: "44px"
                         }}
                       />
                       <button
                         onClick={handleUpdateStop}
                         style={{
-                          padding: "4px 8px",
+                          padding: "6px 12px",
                           background: "#16a34a",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "12px"
+                          fontSize: "14px",
+                          minWidth: "44px",
+                          minHeight: "44px"
                         }}
                       >
                         ✓
@@ -665,13 +709,15 @@ export default function PositionDetail({ ticker, onBack }) {
                       <button
                         onClick={() => setEditingStop(false)}
                         style={{
-                          padding: "4px 8px",
+                          padding: "6px 12px",
                           background: "#64748b",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "12px"
+                          fontSize: "14px",
+                          minWidth: "44px",
+                          minHeight: "44px"
                         }}
                       >
                         ✕
@@ -726,12 +772,13 @@ export default function PositionDetail({ ticker, onBack }) {
                         }}
                         autoFocus
                         style={{
-                          padding: "4px 8px",
+                          padding: "8px 12px",
                           border: "2px solid #3b82f6",
                           borderRadius: "4px",
-                          fontSize: "14px",
+                          fontSize: "16px",
                           fontWeight: "600",
-                          background: "white"
+                          background: "white",
+                          minHeight: "44px"
                         }}
                       >
                         <option value="EMA20">EMA20</option>
@@ -742,13 +789,15 @@ export default function PositionDetail({ ticker, onBack }) {
                       <button
                         onClick={handleUpdateTrailing}
                         style={{
-                          padding: "4px 8px",
+                          padding: "6px 12px",
                           background: "#16a34a",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "12px"
+                          fontSize: "14px",
+                          minWidth: "44px",
+                          minHeight: "44px"
                         }}
                       >
                         ✓
@@ -756,13 +805,15 @@ export default function PositionDetail({ ticker, onBack }) {
                       <button
                         onClick={() => setEditingTrailing(false)}
                         style={{
-                          padding: "4px 8px",
+                          padding: "6px 12px",
                           background: "#64748b",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "12px"
+                          fontSize: "14px",
+                          minWidth: "44px",
+                          minHeight: "44px"
                         }}
                       >
                         ✕
@@ -814,23 +865,26 @@ export default function PositionDetail({ ticker, onBack }) {
                         autoFocus
                         style={{
                           width: "100px",
-                          padding: "4px 8px",
+                          padding: "8px 12px",
                           border: "2px solid #3b82f6",
                           borderRadius: "4px",
-                          fontSize: "14px",
-                          fontWeight: "600"
+                          fontSize: "16px",
+                          fontWeight: "600",
+                          minHeight: "44px"
                         }}
                       />
                       <button
                         onClick={handleUpdateTarget}
                         style={{
-                          padding: "4px 8px",
+                          padding: "6px 12px",
                           background: "#16a34a",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "12px"
+                          fontSize: "14px",
+                          minWidth: "44px",
+                          minHeight: "44px"
                         }}
                       >
                         ✓
@@ -838,13 +892,15 @@ export default function PositionDetail({ ticker, onBack }) {
                       <button
                         onClick={() => setEditingTarget(false)}
                         style={{
-                          padding: "4px 8px",
+                          padding: "6px 12px",
                           background: "#64748b",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "12px"
+                          fontSize: "14px",
+                          minWidth: "44px",
+                          minHeight: "44px"
                         }}
                       >
                         ✕
@@ -1057,27 +1113,46 @@ export default function PositionDetail({ ticker, onBack }) {
                   key={idx}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "140px 120px 1fr",
-                    gap: "16px",
+                    gridTemplateColumns: "1fr",
+                    gap: "8px",
                     padding: "12px",
                     background: "#f8fafc",
                     borderRadius: "6px",
                     fontSize: "14px"
                   }}
                 >
-                  <div style={{ color: "#64748b", fontWeight: "500", fontSize: "13px" }}>{timestamp}</div>
                   <div style={{
-                    fontWeight: "600",
-                    fontSize: "12px",
-                    color: event.event_type === 'ENTRY' ? "#16a34a" :
-                           event.event_type === 'EXIT' ? "#dc2626" :
-                           event.event_type === 'PARTIAL_EXIT' ? "#f59e0b" :
-                           event.event_type === 'STOP_MOVED' ? "#3b82f6" :
-                           event.event_type === 'NOTE' ? "#8b5cf6" : "#64748b"
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px"
                   }}>
-                    {event.event_type}
+                    <div style={{ color: "#64748b", fontWeight: "500", fontSize: "12px" }}>
+                      {timestamp}
+                    </div>
+                    <div style={{
+                      fontWeight: "600",
+                      fontSize: "11px",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      background: event.event_type === 'ENTRY' ? "#dcfce7" :
+                                 event.event_type === 'EXIT' ? "#fee2e2" :
+                                 event.event_type === 'PARTIAL_EXIT' ? "#ffedd5" :
+                                 event.event_type === 'STOP_MOVED' ? "#dbeafe" :
+                                 event.event_type === 'NOTE' ? "#f3e8ff" : "#f1f5f9",
+                      color: event.event_type === 'ENTRY' ? "#16a34a" :
+                             event.event_type === 'EXIT' ? "#dc2626" :
+                             event.event_type === 'PARTIAL_EXIT' ? "#f59e0b" :
+                             event.event_type === 'STOP_MOVED' ? "#3b82f6" :
+                             event.event_type === 'NOTE' ? "#8b5cf6" : "#64748b"
+                    }}>
+                      {event.event_type}
+                    </div>
                   </div>
-                  <div style={{ color: "#0f172a" }}>{event.description}</div>
+                  <div style={{ color: "#0f172a", fontSize: "13px", lineHeight: "1.5" }}>
+                    {event.description}
+                  </div>
                 </div>
               );
             })}
