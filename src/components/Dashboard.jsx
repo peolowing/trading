@@ -238,6 +238,231 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
         </div>
       </header>
 
+
+      {/* Portfolio - Förvaltningslista */}
+      {/* Portfolio - Förvaltningslista */}
+      <div className="card" style={{ marginBottom: "16px" }}>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <p className="eyebrow">Förvaltningslista – Exit Cockpit</p>
+            <span className="tag">{portfolio.length} positioner</span>
+          </div>
+          <button
+            onClick={() => onNavigate("closed-positions")}
+            style={{
+              padding: "6px 12px",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              color: "#64748b",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px"
+            }}
+          >
+            📚 Avslutade affärer
+          </button>
+        </div>
+
+        {portfolio.length > 0 && (
+          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", fontSize: "11px", flexWrap: "wrap" }}>
+            <span style={{ color: "#64748b" }}>🟢 HOLD</span>
+            <span style={{ color: "#64748b" }}>🟡 TIGHTEN STOP</span>
+            <span style={{ color: "#64748b" }}>🟠 PARTIAL EXIT</span>
+            <span style={{ color: "#64748b" }}>🔴 EXIT</span>
+            <span style={{ color: "#64748b" }}>⚫ STOP HIT</span>
+          </div>
+        )}
+
+        {portfolio.length === 0 ? (
+          <p style={{ color: "#64748b", textAlign: "center", padding: "20px" }}>
+            Inga aktiepositioner ännu. Lägg till från analysvyn.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Status</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Entry</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>PnL %</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>R</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Stop</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Target</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Trailing</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {portfolio
+                  .sort((a, b) => {
+                    // Sort EXIT first, then STOP_HIT, then others
+                    const statusPriority = {
+                      'EXIT': 1,
+                      'STOP_HIT': 2,
+                      'PARTIAL_EXIT': 3,
+                      'TIGHTEN_STOP': 4,
+                      'HOLD': 5
+                    };
+                    const aPriority = statusPriority[a.current_status] || 99;
+                    const bPriority = statusPriority[b.current_status] || 99;
+                    return aPriority - bPriority;
+                  })
+                  .map((item) => {
+                    const status = item.current_status || 'HOLD';
+
+                    // Status icon
+                    const statusIcon = status === 'HOLD' ? '🟢' :
+                                      status === 'TIGHTEN_STOP' ? '🟡' :
+                                      status === 'PARTIAL_EXIT' ? '🟠' :
+                                      status === 'EXIT' ? '🔴' :
+                                      status === 'STOP_HIT' ? '⚫' : '⚪';
+
+                    // Row highlighting for EXIT/STOP_HIT
+                    const isExit = status === 'EXIT' || status === 'STOP_HIT';
+                    const rowBg = isExit ? "#fef2f2" : "transparent";
+                    const rowBorder = isExit ? "2px solid #fca5a5" : "1px solid #f1f5f9";
+
+                    // PnL color coding
+                    const pnlPct = item.pnl_pct ?? 0;
+                    const pnlColor = pnlPct >= 0 ? "#16a34a" : "#dc2626";
+
+                    // R-multiple color coding
+                    const rMultiple = item.r_multiple ?? 0;
+                    let rColor = "#64748b";
+                    if (rMultiple >= 2) rColor = "#16a34a"; // +2R = green
+                    else if (rMultiple >= 1) rColor = "#3b82f6"; // +1R = blue
+                    else if (rMultiple < 0) rColor = "#dc2626"; // negative = red
+
+                    // Current price (fallback to entry if no current)
+                    const currentPrice = item.current_price || item.entry_price;
+
+                    return (
+                      <tr
+                        key={item.ticker}
+                        style={{
+                          borderBottom: rowBorder,
+                          background: rowBg,
+                          cursor: "pointer",
+                          transition: "all 0.15s"
+                        }}
+                        onClick={() => onOpenPosition && onOpenPosition(item.ticker)}
+                        onMouseEnter={(e) => {
+                          if (!isExit) e.currentTarget.style.background = "#f8fafc";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = rowBg;
+                        }}
+                      >
+                        {/* Status Icon */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <span style={{ fontSize: "20px" }}>{statusIcon}</span>
+                        </td>
+
+                        {/* Aktie */}
+                        <td style={{ padding: "10px 12px" }}>
+                          <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
+                        </td>
+
+                        {/* Pris */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                          {currentPrice ? currentPrice.toFixed(2) : "—"}
+                        </td>
+
+                        {/* Entry */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
+                          {item.entry_price ? item.entry_price.toFixed(2) : "—"}
+                        </td>
+
+                        {/* PnL % */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
+                          {pnlPct !== null && pnlPct !== undefined ? `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(1)}%` : "—"}
+                        </td>
+
+                        {/* R-multiple */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: rColor, fontVariantNumeric: "tabular-nums" }}>
+                          {rMultiple !== null && rMultiple !== undefined ? `${rMultiple > 0 ? '+' : ''}${rMultiple.toFixed(1)}R` : "—"}
+                        </td>
+
+                        {/* Stop */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
+                          {item.current_stop ? item.current_stop.toFixed(2) : item.initial_stop?.toFixed(2) || "—"}
+                        </td>
+
+                        {/* Target */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
+                          {item.initial_target ? item.initial_target.toFixed(2) : "—"}
+                        </td>
+
+                        {/* Trailing Type */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <span style={{
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            color: "#64748b",
+                            background: "#f1f5f9",
+                            padding: "2px 6px",
+                            borderRadius: "4px"
+                          }}>
+                            {item.trailing_type || "EMA20"}
+                          </span>
+                        </td>
+
+                        {/* Dagar */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
+                            {item.days_in_trade || 0}d
+                          </span>
+                        </td>
+
+                        {/* Action Button */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <button
+                            className="action-btn delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFromPortfolio(item.ticker);
+                            }}
+                            title="Ta bort från portfölj"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                }
+              </tbody>
+            </table>
+
+            {/* Exit signal explanation row below table */}
+            {portfolio.some(p => p.exit_signal) && (
+              <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b" }}>
+                <strong>Exit-signaler:</strong>
+                <ul style={{ marginTop: "8px", paddingLeft: "20px" }}>
+                  {portfolio.filter(p => p.exit_signal).map(p => (
+                    <li key={p.ticker} style={{ marginBottom: "4px" }}>
+                      <strong>{p.ticker}:</strong> {p.exit_signal}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Update info */}
+            <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b" }}>
+              <strong>Senaste uppdatering:</strong> Kör <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>POST /api/portfolio/update</code> för daglig uppdatering
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Watchlist - Bevakningslista */}
       <div className="card" style={{ marginBottom: "16px" }}>
         <div className="card-header">
@@ -513,229 +738,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
             {/* Status reason as second row below table - optional compact info */}
             <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b" }}>
               <strong>Senaste uppdatering:</strong> Kör <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>POST /api/watchlist/update</code> för daglig statusuppdatering
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Portfolio - Förvaltningslista */}
-      <div className="card" style={{ marginBottom: "16px" }}>
-        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-          <div>
-            <p className="eyebrow">Förvaltningslista – Exit Cockpit</p>
-            <span className="tag">{portfolio.length} positioner</span>
-          </div>
-          <button
-            onClick={() => onNavigate("closed-positions")}
-            style={{
-              padding: "6px 12px",
-              background: "white",
-              border: "1px solid #e2e8f0",
-              borderRadius: "6px",
-              fontSize: "13px",
-              fontWeight: "500",
-              color: "#64748b",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px"
-            }}
-          >
-            📚 Avslutade affärer
-          </button>
-        </div>
-
-        {portfolio.length > 0 && (
-          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", fontSize: "11px", flexWrap: "wrap" }}>
-            <span style={{ color: "#64748b" }}>🟢 HOLD</span>
-            <span style={{ color: "#64748b" }}>🟡 TIGHTEN STOP</span>
-            <span style={{ color: "#64748b" }}>🟠 PARTIAL EXIT</span>
-            <span style={{ color: "#64748b" }}>🔴 EXIT</span>
-            <span style={{ color: "#64748b" }}>⚫ STOP HIT</span>
-          </div>
-        )}
-
-        {portfolio.length === 0 ? (
-          <p style={{ color: "#64748b", textAlign: "center", padding: "20px" }}>
-            Inga aktiepositioner ännu. Lägg till från analysvyn.
-          </p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Status</th>
-                  <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Entry</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>PnL %</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>R</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Stop</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Target</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Trailing</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {portfolio
-                  .sort((a, b) => {
-                    // Sort EXIT first, then STOP_HIT, then others
-                    const statusPriority = {
-                      'EXIT': 1,
-                      'STOP_HIT': 2,
-                      'PARTIAL_EXIT': 3,
-                      'TIGHTEN_STOP': 4,
-                      'HOLD': 5
-                    };
-                    const aPriority = statusPriority[a.current_status] || 99;
-                    const bPriority = statusPriority[b.current_status] || 99;
-                    return aPriority - bPriority;
-                  })
-                  .map((item) => {
-                    const status = item.current_status || 'HOLD';
-
-                    // Status icon
-                    const statusIcon = status === 'HOLD' ? '🟢' :
-                                      status === 'TIGHTEN_STOP' ? '🟡' :
-                                      status === 'PARTIAL_EXIT' ? '🟠' :
-                                      status === 'EXIT' ? '🔴' :
-                                      status === 'STOP_HIT' ? '⚫' : '⚪';
-
-                    // Row highlighting for EXIT/STOP_HIT
-                    const isExit = status === 'EXIT' || status === 'STOP_HIT';
-                    const rowBg = isExit ? "#fef2f2" : "transparent";
-                    const rowBorder = isExit ? "2px solid #fca5a5" : "1px solid #f1f5f9";
-
-                    // PnL color coding
-                    const pnlPct = item.pnl_pct ?? 0;
-                    const pnlColor = pnlPct >= 0 ? "#16a34a" : "#dc2626";
-
-                    // R-multiple color coding
-                    const rMultiple = item.r_multiple ?? 0;
-                    let rColor = "#64748b";
-                    if (rMultiple >= 2) rColor = "#16a34a"; // +2R = green
-                    else if (rMultiple >= 1) rColor = "#3b82f6"; // +1R = blue
-                    else if (rMultiple < 0) rColor = "#dc2626"; // negative = red
-
-                    // Current price (fallback to entry if no current)
-                    const currentPrice = item.current_price || item.entry_price;
-
-                    return (
-                      <tr
-                        key={item.ticker}
-                        style={{
-                          borderBottom: rowBorder,
-                          background: rowBg,
-                          cursor: "pointer",
-                          transition: "all 0.15s"
-                        }}
-                        onClick={() => onOpenPosition && onOpenPosition(item.ticker)}
-                        onMouseEnter={(e) => {
-                          if (!isExit) e.currentTarget.style.background = "#f8fafc";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = rowBg;
-                        }}
-                      >
-                        {/* Status Icon */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                          <span style={{ fontSize: "20px" }}>{statusIcon}</span>
-                        </td>
-
-                        {/* Aktie */}
-                        <td style={{ padding: "10px 12px" }}>
-                          <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
-                        </td>
-
-                        {/* Pris */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                          {currentPrice ? currentPrice.toFixed(2) : "—"}
-                        </td>
-
-                        {/* Entry */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
-                          {item.entry_price ? item.entry_price.toFixed(2) : "—"}
-                        </td>
-
-                        {/* PnL % */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
-                          {pnlPct !== null && pnlPct !== undefined ? `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(1)}%` : "—"}
-                        </td>
-
-                        {/* R-multiple */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: rColor, fontVariantNumeric: "tabular-nums" }}>
-                          {rMultiple !== null && rMultiple !== undefined ? `${rMultiple > 0 ? '+' : ''}${rMultiple.toFixed(1)}R` : "—"}
-                        </td>
-
-                        {/* Stop */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
-                          {item.current_stop ? item.current_stop.toFixed(2) : item.initial_stop?.toFixed(2) || "—"}
-                        </td>
-
-                        {/* Target */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
-                          {item.initial_target ? item.initial_target.toFixed(2) : "—"}
-                        </td>
-
-                        {/* Trailing Type */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                          <span style={{
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            color: "#64748b",
-                            background: "#f1f5f9",
-                            padding: "2px 6px",
-                            borderRadius: "4px"
-                          }}>
-                            {item.trailing_type || "EMA20"}
-                          </span>
-                        </td>
-
-                        {/* Dagar */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                          <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
-                            {item.days_in_trade || 0}d
-                          </span>
-                        </td>
-
-                        {/* Action Button */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                          <button
-                            className="action-btn delete"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFromPortfolio(item.ticker);
-                            }}
-                            title="Ta bort från portfölj"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
-
-            {/* Exit signal explanation row below table */}
-            {portfolio.some(p => p.exit_signal) && (
-              <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b" }}>
-                <strong>Exit-signaler:</strong>
-                <ul style={{ marginTop: "8px", paddingLeft: "20px" }}>
-                  {portfolio.filter(p => p.exit_signal).map(p => (
-                    <li key={p.ticker} style={{ marginBottom: "4px" }}>
-                      <strong>{p.ticker}:</strong> {p.exit_signal}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Update info */}
-            <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b" }}>
-              <strong>Senaste uppdatering:</strong> Kör <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>POST /api/portfolio/update</code> för daglig uppdatering
             </div>
           </div>
         )}

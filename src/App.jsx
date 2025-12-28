@@ -209,15 +209,6 @@ export default function App() {
           <button className="ghost" onClick={() => setLearnMode(v => !v)}>
             {learnMode ? "Stäng lär-läge" : "Lär-läge"}
           </button>
-        </div>
-      </header>
-
-      <div className="card" style={{ marginBottom: "16px" }}>
-        <div className="card-header">
-          <p className="eyebrow">Åtgärder</p>
-          <span className="tag">Spara eller Bevaka</span>
-        </div>
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
           <button
             className="ghost"
             style={{ background: "#dbeafe", borderColor: "#93c5fd" }}
@@ -234,10 +225,10 @@ export default function App() {
               }
             }}
           >
-            ⭐ Lägg till i Bevakningslista
+            ⭐ Bevaka
           </button>
         </div>
-      </div>
+      </header>
 
       <div className="card score-card">
         <div className="score-main">
