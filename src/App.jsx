@@ -465,21 +465,27 @@ export default function App() {
         </div>
         <div className="ai-analysis">
           {ai?.split('\n').map((line, i) => {
-            // Handle ## markdown headings
-            if (line.startsWith('## ')) {
-              return <h3 key={i} className="ai-heading">{line.substring(3).trim()}</h3>;
+            const trimmedLine = line.trim();
+
+            // Handle ### markdown headings (h4)
+            if (trimmedLine.startsWith('### ')) {
+              return <h4 key={i} className="ai-subheading">{trimmedLine.substring(4).trim()}</h4>;
+            }
+            // Handle ## markdown headings (h3)
+            else if (trimmedLine.startsWith('## ')) {
+              return <h3 key={i} className="ai-heading">{trimmedLine.substring(3).trim()}</h3>;
             }
             // Handle **bold** headings (old format)
-            else if (line.startsWith('**') && line.endsWith('**')) {
-              return <h3 key={i} className="ai-heading">{line.replace(/\*\*/g, '')}</h3>;
+            else if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+              return <h3 key={i} className="ai-heading">{trimmedLine.replace(/\*\*/g, '')}</h3>;
             }
-            // Handle bullet points
-            else if (line.startsWith('•') || line.trim().startsWith('•')) {
-              return <li key={i} className="ai-bullet">{line.replace('•', '').trim()}</li>;
+            // Handle bullet points (- or •)
+            else if (trimmedLine.startsWith('-') || trimmedLine.startsWith('•')) {
+              return <li key={i} className="ai-bullet">{trimmedLine.replace(/^[-•]\s*/, '').trim()}</li>;
             }
             // Handle other text
-            else if (line.trim()) {
-              return <p key={i} className="ai-text">{line}</p>;
+            else if (trimmedLine) {
+              return <p key={i} className="ai-text">{trimmedLine}</p>;
             }
             return null;
           })}
