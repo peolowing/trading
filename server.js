@@ -2012,6 +2012,123 @@ app.get("/api/quote/:ticker", async (req, res) => {
   }
 });
 
+// GET /api/portfolio/closed - Get all closed positions
+app.get("/api/portfolio/closed", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('portfolio')
+      .select('*')
+      .eq('exit_status', 'EXITED')
+      .order('exit_date', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data || []);
+  } catch (e) {
+    console.error("Get closed positions error:", e);
+    res.status(500).json({ error: "Failed to fetch closed positions" });
+  }
+});
+
+// GET /api/portfolio/:ticker - Get single position details
+app.get("/api/portfolio/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+
+    const { data, error } = await supabase
+      .from('portfolio')
+      .select('*')
+      .eq('ticker', ticker)
+      .single();
+
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(404).json({ error: "Position not found" });
+    }
+
+    res.json(data);
+  } catch (e) {
+    console.error("Get portfolio position error:", e);
+    res.status(500).json({ error: "Failed to fetch position" });
+  }
+});
+
+// GET /api/portfolio/:ticker/events - Get all events for a position
+app.get("/api/portfolio/:ticker/events", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+
+    const { data, error } = await supabase
+      .from('portfolio_events')
+      .select('*')
+      .eq('ticker', ticker)
+      .order('event_date', { ascending: true });
+
+    if (error) throw error;
+
+    res.json(data || []);
+  } catch (e) {
+    console.error("Get portfolio events error:", e);
+    res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
+// POST /api/portfolio/:ticker/evaluation - Save self-evaluation for closed position
+app.post("/api/portfolio/:ticker/evaluation", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+    const {
+      plan_followed,
+      exited_early,
+      stopped_out,
+      broke_rule,
+      could_scale_better,
+      edge_tag,
+      lesson_learned
+    } = req.body;
+
+    const { data, error } = await supabase
+      .from('portfolio')
+      .update({
+        plan_followed,
+        exited_early,
+        stopped_out,
+        broke_rule,
+        could_scale_better,
+        edge_tag,
+        lesson_learned,
+        last_updated: new Date().toISOString().split('T')[0]
+      })
+      .eq('ticker', ticker)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ message: "Evaluation saved successfully", data });
+  } catch (e) {
+    console.error("Save evaluation error:", e);
+    res.status(500).json({ error: "Failed to save evaluation" });
+  }
+});
+
 // POST /api/portfolio/update-field/:ticker - Update editable portfolio fields
 app.post("/api/portfolio/update-field/:ticker", async (req, res) => {
   if (!supabase) {

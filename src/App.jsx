@@ -10,10 +10,11 @@ import {
   YAxis
 } from "recharts";
 import TradeChart from "./components/TradeChart";
-import TradeJournal from "./components/TradeJournal";
 import ScreenerAdmin from "./components/ScreenerAdmin";
 import Dashboard from "./components/Dashboard";
 import PositionDetail from "./components/PositionDetail";
+import ClosedPositions from "./components/ClosedPositions";
+import ClosedPositionDetail from "./components/ClosedPositionDetail";
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -21,7 +22,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [learnMode, setLearnMode] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
-  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "journal", "screener-admin", or "position-detail"
+  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "screener-admin", "position-detail", "closed-positions", or "closed-position-detail"
 
   useEffect(() => {
     if (selectedStock) {
@@ -118,14 +119,32 @@ export default function App() {
     );
   }
 
-  // Render Trade Journal if that view is selected
-  if (currentView === "journal") {
-    return <TradeJournal onNavigate={() => setCurrentView("dashboard")} />;
-  }
-
   // Render Screener Admin if that view is selected
   if (currentView === "screener-admin") {
     return <ScreenerAdmin onNavigate={() => setCurrentView("dashboard")} />;
+  }
+
+  // Render Closed Positions list if that view is selected
+  if (currentView === "closed-positions") {
+    return (
+      <ClosedPositions
+        onSelectPosition={(ticker) => {
+          setSelectedStock(ticker);
+          setCurrentView("closed-position-detail");
+        }}
+        onBack={() => setCurrentView("dashboard")}
+      />
+    );
+  }
+
+  // Render Closed Position Detail if that view is selected
+  if (currentView === "closed-position-detail") {
+    return (
+      <ClosedPositionDetail
+        ticker={selectedStock}
+        onBack={() => setCurrentView("closed-positions")}
+      />
+    );
   }
 
   // Analysis view - shown when a stock is selected

@@ -399,24 +399,28 @@ export default function PositionDetail({ ticker, onBack }) {
       {/* 1️⃣ HEADER - POSITION SNAPSHOT */}
       {/* ============================================ */}
       <header className="header" style={{
-        marginBottom: "24px",
+        marginBottom: "16px",
         flexDirection: "column",
-        gap: "16px"
+        gap: "8px",
+        background: "white",
+        padding: "12px 16px",
+        borderRadius: "8px",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
       }}>
         <div style={{ width: "100%" }}>
-          <p className="eyebrow">Position Detail</p>
+          <p className="eyebrow" style={{ fontSize: "10px", marginBottom: "4px" }}>POSITION DETAIL</p>
           <h1 style={{
-            fontSize: "clamp(24px, 5vw, 32px)",
-            margin: "8px 0",
+            fontSize: "clamp(20px, 4.5vw, 26px)",
+            margin: "0 0 8px 0",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "6px",
             flexWrap: "wrap"
           }}>
             {ticker}
-            <span style={{ fontSize: "clamp(20px, 4vw, 28px)" }}>{statusIcon}</span>
+            <span style={{ fontSize: "clamp(18px, 3.5vw, 24px)" }}>{statusIcon}</span>
             <span style={{
-              fontSize: "clamp(14px, 3vw, 18px)",
+              fontSize: "clamp(13px, 2.5vw, 16px)",
               fontWeight: "600",
               color: "#64748b"
             }}>
@@ -427,32 +431,32 @@ export default function PositionDetail({ ticker, onBack }) {
           {/* Compact metrics - Responsive grid */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-            gap: "12px",
-            marginTop: "12px",
-            fontSize: "14px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))",
+            gap: "8px",
+            marginTop: "0",
+            fontSize: "13px",
             fontWeight: "600"
           }}>
             <div>
-              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>R:</span>
+              <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>R:</span>
               <span style={{ color: rColor, fontVariantNumeric: "tabular-nums" }}>
                 {rMultiple > 0 ? '+' : ''}{rMultiple.toFixed(1)}R
               </span>
             </div>
             <div>
-              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>PnL:</span>
+              <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>PnL:</span>
               <span style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
                 {pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
               </span>
             </div>
             <div>
-              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>Dagar:</span>
+              <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>Dagar:</span>
               <span style={{ color: "#0f172a" }}>{daysInTrade}d</span>
             </div>
             {position.entry_date && (
               <div>
-                <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>Entry:</span>
-                <span style={{ color: "#0f172a", fontSize: "12px" }}>{position.entry_date}</span>
+                <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>Entry:</span>
+                <span style={{ color: "#0f172a", fontSize: "11px" }}>{position.entry_date}</span>
               </div>
             )}
           </div>

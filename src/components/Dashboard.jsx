@@ -160,9 +160,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
           <button className="ghost" onClick={() => onNavigate("screener-admin")}>
             ⚙️ Screener
           </button>
-          <button className="ghost" onClick={() => onNavigate("journal")}>
-            📔 Handelsjournal
-          </button>
         </div>
       </header>
 
@@ -436,9 +433,29 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
 
       {/* Portfolio - Förvaltningslista */}
       <div className="card" style={{ marginBottom: "16px" }}>
-        <div className="card-header">
-          <p className="eyebrow">Förvaltningslista – Exit Cockpit</p>
-          <span className="tag">{portfolio.length} positioner</span>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <p className="eyebrow">Förvaltningslista – Exit Cockpit</p>
+            <span className="tag">{portfolio.length} positioner</span>
+          </div>
+          <button
+            onClick={() => onNavigate("closed-positions")}
+            style={{
+              padding: "6px 12px",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              color: "#64748b",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px"
+            }}
+          >
+            📚 Avslutade affärer
+          </button>
         </div>
 
         {portfolio.length > 0 && (
