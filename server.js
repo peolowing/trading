@@ -15,6 +15,11 @@ import {
   marketdataRepo,
   screenerRepo
 } from "./repositories/index.js";
+import {
+  positionService,
+  analysisService,
+  watchlistService
+} from "./services/index.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -1673,151 +1678,22 @@ app.get("/api/portfolio/events", async (req, res) => {
 
 // POST /api/portfolio/exit/:ticker - Exit en position
 app.post("/api/portfolio/exit/:ticker", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker } = req.params;
-    const {
-      exit_type,
-      exit_price,
-      exit_quantity,
-      lessons_learned,
-      followed_plan,
-      exit_too_early,
-      let_market_decide,
-      good_entry_bad_exit,
-      broke_rules
-    } = req.body;
+    const exitData = req.body;
 
-    // Fetch current position
-    const { data: position, error: fetchError } = await supabase
-      .from('portfolio')
-      .select('*')
-      .eq('ticker', ticker)
-      .maybeSingle();
+    // Use position service to handle exit logic
+    const result = await positionService.exitPosition(ticker, exitData);
 
-    if (fetchError) throw fetchError;
-    if (!position) {
-      return res.status(404).json({ error: "Position not found" });
-    }
-
-    const exitPriceNum = parseFloat(exit_price);
-    const exitDate = dayjs().format('YYYY-MM-DD');
-
-    // Calculate final R-multiple
-    const finalR = position.initial_r > 0
-      ? (exitPriceNum - position.entry_price) / position.initial_r
-      : 0;
-
-    // Create exit checklist object
-    const exitChecklist = {
-      followed_plan,
-      exit_too_early,
-      let_market_decide,
-      good_entry_bad_exit,
-      broke_rules
-    };
-
-    if (exit_type === 'FULL') {
-      // Full exit - update position as exited
-      const { error: updateError } = await supabase
-        .from('portfolio')
-        .update({
-          exit_date: exitDate,
-          exit_price: exitPriceNum,
-          exit_type,
-          r_multiple: parseFloat(finalR.toFixed(2)),
-          pnl_pct: parseFloat(((exitPriceNum - position.entry_price) / position.entry_price * 100).toFixed(2)),
-          current_status: 'EXITED',
-          lessons_learned,
-          exit_checklist: exitChecklist,
-          last_updated: exitDate
-        })
-        .eq('ticker', ticker);
-
-      if (updateError) throw updateError;
-
-      // Log event
-      try {
-        await supabase
-          .from('portfolio_events')
-          .insert({
-            ticker,
-            event_date: exitDate,
-            event_type: 'EXIT',
-            description: `Sålt hela positionen @ ${exitPriceNum.toFixed(2)} (${finalR.toFixed(1)}R)`
-          });
-      } catch (e) {
-        // If table doesn't exist, skip event logging
-        console.log("Event logging skipped (table may not exist yet)");
-      }
-
-    } else if (exit_type === 'PARTIAL') {
-      // Partial exit - reduce quantity
-      const newQuantity = position.quantity - parseInt(exit_quantity || position.quantity / 2);
-
-      const { error: updateError } = await supabase
-        .from('portfolio')
-        .update({
-          quantity: newQuantity,
-          current_status: 'PARTIAL_EXIT',
-          last_updated: exitDate
-        })
-        .eq('ticker', ticker);
-
-      if (updateError) throw updateError;
-
-      // Log event
-      try {
-        await supabase
-          .from('portfolio_events')
-          .insert({
-            ticker,
-            event_date: exitDate,
-            event_type: 'PARTIAL_EXIT',
-            description: `Sålt ${exit_quantity} aktier @ ${exitPriceNum.toFixed(2)} (kvar: ${newQuantity})`
-          });
-      } catch (e) {
-        console.log("Event logging skipped");
-      }
-
-    } else if (exit_type === 'STOP_HIT') {
-      // Stop hit - full exit
-      const { error: updateError } = await supabase
-        .from('portfolio')
-        .update({
-          exit_date: exitDate,
-          exit_price: exitPriceNum,
-          exit_type,
-          r_multiple: parseFloat(finalR.toFixed(2)),
-          pnl_pct: parseFloat(((exitPriceNum - position.entry_price) / position.entry_price * 100).toFixed(2)),
-          current_status: 'STOP_HIT',
-          lessons_learned,
-          exit_checklist: exitChecklist,
-          last_updated: exitDate
-        })
-        .eq('ticker', ticker);
-
-      if (updateError) throw updateError;
-
-      // Log event
-      try {
-        await supabase
-          .from('portfolio_events')
-          .insert({
-            ticker,
-            event_date: exitDate,
-            event_type: 'STOP_HIT',
-            description: `Stop träffad @ ${exitPriceNum.toFixed(2)} (${finalR.toFixed(1)}R)`
-          });
-      } catch (e) {
-        console.log("Event logging skipped");
-      }
-    }
-
-    res.json({ message: "Position exited successfully" });
+    res.json({
+      message: "Position exited successfully",
+      position: result,
+      metrics: result.exit_metrics
+    });
   } catch (e) {
     console.error("Exit position error:", e);
     res.status(500).json({ error: "Failed to exit position" });
@@ -1826,7 +1702,7 @@ app.post("/api/portfolio/exit/:ticker", async (req, res) => {
 
 // POST /api/portfolio/notes/:ticker - Lägg till notering
 app.post("/api/portfolio/notes/:ticker", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
@@ -1838,88 +1714,35 @@ app.post("/api/portfolio/notes/:ticker", async (req, res) => {
       return res.status(400).json({ error: "note required" });
     }
 
-    const eventDate = dayjs().format('YYYY-MM-DD');
-
-    // Add note to events log
-    try {
-      const { error } = await supabase
-        .from('portfolio_events')
-        .insert({
-          ticker,
-          event_date: eventDate,
-          event_type: 'NOTE',
-          description: note
-        });
-
-      if (error) throw error;
-    } catch (e) {
-      // If table doesn't exist, skip
-      console.log("Event logging skipped (table may not exist yet)");
-    }
-
-    res.json({ message: "Note added successfully" });
+    const updatedPosition = await positionService.addNotes(ticker, note);
+    res.json({ message: "Note added successfully", position: updatedPosition });
   } catch (e) {
     console.error("Add note error:", e);
-    res.status(500).json({ error: "Failed to add note" });
+    res.status(500).json({ error: e.message || "Failed to add note" });
   }
 });
 
 // POST /api/portfolio/move-stop/:ticker - Flytta stop
 app.post("/api/portfolio/move-stop/:ticker", async (req, res) => {
-  if (!supabase) {
+  if (!portfolioRepo.hasDatabase()) {
     return res.status(503).json({ error: "Database not configured" });
   }
 
   try {
     const { ticker } = req.params;
-    const { new_stop } = req.body;
+    const { new_stop, reason } = req.body;
 
     if (!new_stop) {
       return res.status(400).json({ error: "new_stop required" });
     }
 
     const newStopNum = parseFloat(new_stop);
+    const updatedPosition = await positionService.moveStop(ticker, newStopNum, reason);
 
-    // Fetch current position to get old stop
-    const { data: position, error: fetchError } = await supabase
-      .from('portfolio')
-      .select('current_stop')
-      .eq('ticker', ticker)
-      .maybeSingle();
-
-    if (fetchError) throw fetchError;
-
-    const oldStop = position?.current_stop || 0;
-
-    // Update stop
-    const { error: updateError } = await supabase
-      .from('portfolio')
-      .update({
-        current_stop: newStopNum,
-        last_updated: dayjs().format('YYYY-MM-DD')
-      })
-      .eq('ticker', ticker);
-
-    if (updateError) throw updateError;
-
-    // Log event
-    try {
-      await supabase
-        .from('portfolio_events')
-        .insert({
-          ticker,
-          event_date: dayjs().format('YYYY-MM-DD'),
-          event_type: 'STOP_MOVED',
-          description: `Stop flyttad: ${oldStop.toFixed(2)} → ${newStopNum.toFixed(2)}`
-        });
-    } catch (e) {
-      console.log("Event logging skipped");
-    }
-
-    res.json({ message: "Stop moved successfully" });
+    res.json({ message: "Stop moved successfully", position: updatedPosition });
   } catch (e) {
     console.error("Move stop error:", e);
-    res.status(500).json({ error: "Failed to move stop" });
+    res.status(500).json({ error: e.message || "Failed to move stop" });
   }
 });
 
