@@ -6,6 +6,7 @@ import { EMA, RSI, ATR } from "technicalindicators";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+import { updateWatchlistStatus, buildWatchlistInput } from "./lib/watchlistLogic.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -29,6 +30,92 @@ const supabase = hasSupabase
 function alignSeries(series, totalLength) {
   const padding = totalLength - series.length;
   return Array(padding).fill(null).concat(series);
+}
+
+// Strategy detection
+function detectStrategy(indicators) {
+  const { ema20, ema50, rsi14, relativeVolume, regime, close } = indicators;
+
+  if (!ema20 || !ema50 || !rsi14) return "Hold";
+
+  const priceAboveEMA20 = close > ema20;
+  const priceAboveEMA50 = close > ema50;
+  const ema20AboveEMA50 = ema20 > ema50;
+
+  // Pullback Strategy
+  if (regime === "Bullish Trend" && priceAboveEMA50 && !priceAboveEMA20 && rsi14 < 50) {
+    return "Pullback";
+  }
+
+  // Breakout Strategy
+  if (regime === "Consolidation" && relativeVolume > 1.5 && close > ema20) {
+    return "Breakout";
+  }
+
+  // Reversal Strategy
+  if (regime === "Bearish Trend" && rsi14 < 30 && relativeVolume > 1.3) {
+    return "Reversal";
+  }
+
+  // Trend Following
+  if (regime === "Bullish Trend" && priceAboveEMA20 && ema20AboveEMA50 && rsi14 > 50 && rsi14 < 70) {
+    return "Trend Following";
+  }
+
+  return "Hold";
+}
+
+// Helper: Get backtest results from Supabase
+async function getBacktestResults(ticker, date, strategy) {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('backtest_results')
+      .select('*')
+      .eq('ticker', ticker)
+      .eq('analysis_date', date)
+      .eq('strategy', strategy)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error("Supabase backtest_results error:", error);
+      return null;
+    }
+
+    return data;
+  } catch (e) {
+    console.error("getBacktestResults error:", e);
+    return null;
+  }
+}
+
+// Helper: Save backtest results to Supabase
+async function saveBacktestResults(ticker, date, results) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase
+      .from('backtest_results')
+      .upsert({
+        ticker,
+        analysis_date: date,
+        strategy: results.strategy,
+        total_signals: results.totalSignals,
+        wins: results.wins,
+        losses: results.losses,
+        win_rate: results.winRate,
+        avg_win: results.avgWin,
+        avg_loss: results.avgLoss,
+        total_return: results.totalReturn,
+        max_drawdown: results.maxDrawdown,
+        sharpe_ratio: results.sharpeRatio,
+        trades_data: results.trades
+      }, { onConflict: 'ticker,analysis_date,strategy' });
+
+    if (error) console.error("Supabase backtest_results error:", error);
+  } catch (e) {
+    console.error("saveBacktestResults error:", e);
+  }
 }
 
 // Helper: Spara marknadsdata till Supabase
@@ -191,93 +278,141 @@ async function saveBacktestResult(ticker, backtest) {
   }
 }
 
-function runBacktest(candles) {
-  const closes = candles.map(c => c.close);
-  const highs = candles.map(c => c.high);
-  const lows = candles.map(c => c.low);
-  const volumes = candles.map(c => c.volume);
-
-  const ema20Series = alignSeries(EMA.calculate({ period: 20, values: closes }), candles.length);
-  const ema50Series = alignSeries(EMA.calculate({ period: 50, values: closes }), candles.length);
-  const rsi14Series = alignSeries(RSI.calculate({ period: 14, values: closes }), candles.length);
-  const atr14Series = alignSeries(ATR.calculate({ period: 14, high: highs, low: lows, close: closes }), candles.length);
-
-  const trades = [];
+function runBacktest(candles, strategy) {
+  let trades = [];
   let position = null;
+  let equity = 10000;
+  let peak = 10000;
+  let maxDrawdown = 0;
+  const returns = [];
 
-  for (let i = 0; i < candles.length; i++) {
-    const ema20 = ema20Series[i];
-    const ema50 = ema50Series[i];
-    const rsi14 = rsi14Series[i];
-    const atr14 = atr14Series[i];
-    const candle = candles[i];
+  for (let i = 50; i < candles.length; i++) {
+    const closes = candles.slice(0, i + 1).map(c => c.close);
+    const highs = candles.slice(0, i + 1).map(c => c.high);
+    const lows = candles.slice(0, i + 1).map(c => c.low);
 
-    if (!ema20 || !ema50 || !rsi14 || !atr14) continue;
+    if (closes.length < 50) continue;
 
-    const uptrend = ema20 > ema50;
+    const ema20Result = EMA.calculate({ period: 20, values: closes });
+    const ema50Result = EMA.calculate({ period: 50, values: closes });
+    const rsi14Result = RSI.calculate({ period: 14, values: closes });
+    const atr14Result = ATR.calculate({
+      high: highs,
+      low: lows,
+      close: closes,
+      period: 14
+    });
 
-    if (!position && uptrend && rsi14 >= 40 && rsi14 <= 55 && candle.close > ema20) {
-      position = {
-        entryPrice: candle.close,
-        entryIndex: i,
-        stop: candle.close - atr14 * 1.5,
-        date: candle.date
-      };
-      continue;
+    const ema20 = ema20Result[ema20Result.length - 1];
+    const ema50 = ema50Result[ema50Result.length - 1];
+    const rsi14 = rsi14Result[rsi14Result.length - 1];
+    const atr14 = atr14Result[atr14Result.length - 1];
+
+    const current = candles[i];
+    const avgVolume = candles.slice(Math.max(0, i - 20), i).reduce((sum, c) => sum + c.volume, 0) / 20;
+    const relativeVolume = avgVolume > 0 ? current.volume / avgVolume : 1;
+
+    let regime = "Consolidation";
+    if (ema20 > ema50 && current.close > ema20) regime = "Bullish Trend";
+    else if (ema20 < ema50 && current.close < ema20) regime = "Bearish Trend";
+
+    const indicators = {
+      ema20,
+      ema50,
+      rsi14,
+      relativeVolume,
+      regime,
+      close: current.close,
+      high: current.high,
+      low: current.low
+    };
+
+    const detectedStrategy = detectStrategy(indicators);
+    const signal = detectedStrategy === strategy ? "BUY" : "HOLD";
+
+    if (!position && signal === "BUY") {
+      const shares = Math.floor(equity / current.close);
+      if (shares > 0) {
+        position = {
+          entryPrice: current.close,
+          shares,
+          entryDate: current.date,
+          stopLoss: current.close - 2 * atr14
+        };
+      }
     }
 
     if (position) {
-      position.stop = Math.max(position.stop, candle.close - atr14); // trail slightly
-      const hitStop = candle.close < position.stop;
-      const brokeTrend = candle.close < ema50;
-      const overbought = rsi14 > 70;
-      const timedExit = i - position.entryIndex >= 10;
+      if (current.low <= position.stopLoss || rsi14 > 70) {
+        const exitPrice = current.low <= position.stopLoss ? position.stopLoss : current.close;
+        const profit = (exitPrice - position.entryPrice) * position.shares;
+        equity += profit;
+        const returnPct = (profit / (position.entryPrice * position.shares)) * 100;
 
-      if (hitStop || brokeTrend || overbought || timedExit) {
-        const pnlPct = (candle.close - position.entryPrice) / position.entryPrice;
         trades.push({
-          entryDate: position.date,
-          exitDate: candle.date,
-          entry: position.entryPrice,
-          exit: candle.close,
-          holdingDays: i - position.entryIndex,
-          pnlPct
+          entry: position.entryDate,
+          exit: current.date,
+          entryPrice: position.entryPrice,
+          exitPrice,
+          shares: position.shares,
+          profit,
+          returnPct
         });
+
+        returns.push(returnPct / 100);
         position = null;
+
+        if (equity > peak) peak = equity;
+        const drawdown = ((peak - equity) / peak) * 100;
+        if (drawdown > maxDrawdown) maxDrawdown = drawdown;
       }
     }
   }
 
-  const wins = trades.filter(t => t.pnlPct > 0);
-  const losses = trades.filter(t => t.pnlPct <= 0);
-  const equity = trades.reduce((acc, t) => acc * (1 + t.pnlPct), 1);
-  const totalReturn = equity - 1;
+  if (position && candles.length > 0) {
+    const lastCandle = candles[candles.length - 1];
+    const profit = (lastCandle.close - position.entryPrice) * position.shares;
+    equity += profit;
+    const returnPct = (profit / (position.entryPrice * position.shares)) * 100;
 
-  // Calculate current position if exists
-  let currentPosition = null;
-  if (position) {
-    const avgWinPct = wins.length ? wins.reduce((a, t) => a + t.pnlPct, 0) / wins.length : 0.1;
-    const targetPrice = position.entryPrice * (1 + avgWinPct);
+    trades.push({
+      entry: position.entryDate,
+      exit: lastCandle.date,
+      entryPrice: position.entryPrice,
+      exitPrice: lastCandle.close,
+      shares: position.shares,
+      profit,
+      returnPct
+    });
 
-    currentPosition = {
-      entry: position.entryPrice,
-      stop: position.stop,
-      target: targetPrice,
-      entryDate: position.date
-    };
+    returns.push(returnPct / 100);
   }
 
+  const wins = trades.filter(t => t.profit > 0);
+  const losses = trades.filter(t => t.profit <= 0);
+  const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : 0;
+  const avgWin = wins.length > 0 ? wins.reduce((sum, t) => sum + t.returnPct, 0) / wins.length : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((sum, t) => sum + t.returnPct, 0) / losses.length : 0;
+  const totalReturn = ((equity - 10000) / 10000) * 100;
+
+  const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+  const stdDev = returns.length > 0
+    ? Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length)
+    : 0;
+  const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0;
+
   return {
-    trades,
-    currentPosition,
-    stats: {
-      trades: trades.length,
-      winRate: trades.length ? wins.length / trades.length : 0,
-      avgWin: wins.length ? wins.reduce((a, t) => a + t.pnlPct, 0) / wins.length : 0,
-      avgLoss: losses.length ? losses.reduce((a, t) => a + t.pnlPct, 0) / losses.length : 0,
-      totalReturn,
-      expectancy: trades.length ? trades.reduce((a, t) => a + t.pnlPct, 0) / trades.length : 0
-    }
+    strategy,
+    totalSignals: trades.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate,
+    avgWin,
+    avgLoss,
+    totalReturn,
+    maxDrawdown,
+    sharpeRatio,
+    trades
   };
 }
 
@@ -340,57 +475,188 @@ app.get("/api/market-data", async (req, res) => {
 
 // POST /api/analyze
 app.post("/api/analyze", async (req, res) => {
-  const candles = req.body;
+  try {
+    const { ticker, candles: providedCandles } = req.body;
 
-  const closes = candles.map(c => c.close);
-  const highs = candles.map(c => c.high);
-  const lows = candles.map(c => c.low);
-  const volumes = candles.map(c => c.volume);
+    // If ticker is provided, fetch candles from Yahoo Finance
+    let candles = providedCandles;
+    if (ticker && !providedCandles) {
+      const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
+      const today = dayjs().format('YYYY-MM-DD');
 
-  const ema20 = EMA.calculate({ period: 20, values: closes }).at(-1);
-  const ema50 = EMA.calculate({ period: 50, values: closes }).at(-1);
-  const rsi14 = RSI.calculate({ period: 14, values: closes }).at(-1);
-  const atr14 = ATR.calculate({ period: 14, high: highs, low: lows, close: closes }).at(-1);
+      // Try to get cached market data first
+      let cachedData = await getMarketData(ticker, startDate);
+      const needsFetch = !cachedData || cachedData.length === 0 ||
+                        !cachedData.some(c => c.date === today);
 
-  const close = closes.at(-1);
-  const avgVol20 = volumes.slice(-20).reduce((a,b)=>a+b,0)/20;
+      if (needsFetch) {
+        console.log(`Fetching fresh data for ${ticker} from Yahoo Finance...`);
+        const rawCandles = await yahooFinance.chart(ticker, {
+          period1: startDate,
+          period2: today
+        });
 
-  const regime = ema20 > ema50 ? "UPTREND" : "DOWNTREND";
-  const pullback = regime === "UPTREND" && close > ema50 && rsi14 >= 40 && rsi14 <= 55;
-  const backtest = runBacktest(candles);
+        candles = rawCandles.quotes.map(q => ({
+          date: dayjs(q.date).format('YYYY-MM-DD'),
+          open: q.open,
+          high: q.high,
+          low: q.low,
+          close: q.close,
+          volume: q.volume,
+          adjClose: q.adjclose || q.close
+        }));
 
-  const analysis = {
-    regime,
-    indicators: {
-      ema20, ema50, rsi14, atr14,
-      relativeVolume: volumes.at(-1) / avgVol20
-    },
-    setup: pullback ? "LONG_PULLBACK" : "NONE",
-    backtest
-  };
+        // Save to cache
+        await saveMarketData(ticker, candles);
+      } else {
+        console.log(`Using cached data for ${ticker}`);
+        candles = cachedData;
+      }
+    }
 
-  const scoring = computeScore({
-    regime,
-    indicators: analysis.indicators,
-    setup: analysis.setup,
-    backtest
-  });
+    if (!candles || candles.length === 0) {
+      return res.status(400).json({ error: "Missing candles data" });
+    }
 
-  // Spara indikatorer till Supabase
-  const ticker = candles[0]?.ticker || "UNKNOWN";
-  const latestDate = candles.at(-1)?.date;
-  if (ticker && latestDate) {
-    await saveIndicators(ticker, latestDate, {
-      ...analysis.indicators,
-      regime: analysis.regime,
-      setup: analysis.setup
+    if (candles.length < 50) {
+      return res.status(400).json({ error: "Need at least 50 candles for analysis" });
+    }
+
+    const closes = candles.map(c => c.close);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
+    const volumes = candles.map(c => c.volume);
+
+    const ema20Result = EMA.calculate({ period: 20, values: closes });
+    const ema50Result = EMA.calculate({ period: 50, values: closes });
+    const rsi14Result = RSI.calculate({ period: 14, values: closes });
+    const atr14Result = ATR.calculate({
+      high: highs,
+      low: lows,
+      close: closes,
+      period: 14
     });
 
-    // Spara backtest-resultat
-    await saveBacktestResult(ticker, backtest);
-  }
+    const ema20 = alignSeries(ema20Result, closes.length);
+    const ema50 = alignSeries(ema50Result, closes.length);
+    const rsi14 = alignSeries(rsi14Result, closes.length);
+    const atr14 = alignSeries(atr14Result, closes.length);
 
-  res.json({ ...analysis, scoring });
+    const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
+
+    let regime = "Consolidation";
+    const lastEma20 = ema20[ema20.length - 1];
+    const lastEma50 = ema50[ema50.length - 1];
+    const lastClose = closes[closes.length - 1];
+
+    if (!lastEma20 || !lastEma50 || !lastClose) {
+      console.error("Missing indicator values");
+      return res.status(500).json({ error: "Failed to calculate indicators" });
+    }
+
+    if (lastEma20 > lastEma50 && lastClose > lastEma20) {
+      regime = "Bullish Trend";
+    } else if (lastEma20 < lastEma50 && lastClose < lastEma20) {
+      regime = "Bearish Trend";
+    }
+
+    let setup = "Hold";
+    setup = detectStrategy({
+      ema20: lastEma20,
+      ema50: lastEma50,
+      rsi14: rsi14[rsi14.length - 1],
+      relativeVolume,
+      regime,
+      close: lastClose,
+      high: highs[highs.length - 1],
+      low: lows[lows.length - 1]
+    });
+
+    const indicators = {
+      ema20: lastEma20,
+      ema50: lastEma50,
+      rsi14: rsi14[rsi14.length - 1],
+      atr14: atr14[atr14.length - 1],
+      relativeVolume,
+      regime,
+      setup
+    };
+
+    // Calculate edge score (0-10 scale)
+    let edgeScore = 5;
+    if (regime === "Bullish Trend") edgeScore += 2;
+    else if (regime === "Bearish Trend") edgeScore -= 2;
+    if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
+    if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
+    if (relativeVolume > 1.5) edgeScore += 1;
+    if (relativeVolume < 0.8) edgeScore -= 0.5;
+    if (setup !== "Hold") edgeScore += 0.5;
+
+    const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+
+    const scoring = {
+      score: finalEdgeScore,
+      label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+    };
+
+    // Run backtest with detected strategy
+    const today = dayjs().format('YYYY-MM-DD');
+    let backtestResult = null;
+
+    if (ticker && setup !== "Hold") {
+      // Try to get cached backtest results first
+      const cached = await getBacktestResults(ticker, today, setup);
+      if (cached) {
+        backtestResult = {
+          strategy: setup,
+          stats: {
+            trades: cached.total_signals,
+            winRate: cached.win_rate,
+            totalReturn: cached.total_return,
+            avgWin: cached.avg_win,
+            avgLoss: cached.avg_loss,
+            expectancy: cached.avg_win * (cached.win_rate / 100) + cached.avg_loss * (1 - cached.win_rate / 100)
+          },
+          currentPosition: null
+        };
+      } else {
+        // Run fresh backtest
+        const bt = runBacktest(candles, setup);
+        await saveBacktestResults(ticker, today, bt);
+
+        backtestResult = {
+          strategy: setup,
+          stats: {
+            trades: bt.totalSignals,
+            winRate: bt.winRate,
+            totalReturn: bt.totalReturn,
+            avgWin: bt.avgWin,
+            avgLoss: bt.avgLoss,
+            expectancy: bt.winRate > 0 ? (bt.avgWin * bt.winRate / 100) + (bt.avgLoss * (1 - bt.winRate / 100)) : 0
+          },
+          currentPosition: null
+        };
+      }
+    }
+
+    res.json({
+      candles: candles.map(c => ({
+        ...c,
+        date: String(c.date).slice(0, 10)
+      })),
+      ema20,
+      ema50,
+      rsi14,
+      atr14,
+      indicators,
+      scoring,
+      backtest: backtestResult
+    });
+  } catch (error) {
+    console.error("Error in /api/analyze:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/ai-analysis
@@ -574,11 +840,10 @@ app.get("/api/screener", async (req, res) => {
     // Check cache
     if (screenerCache && screenerCacheDate === today) {
       console.log("Using cached screener data");
-      return res.json(screenerCache);
+      return res.json({ stocks: screenerCache });
     }
 
     console.log("Running fresh screener...");
-    const results = [];
 
     // Get dynamic stock list from database, fallback to hardcoded list
     let stockList = UNIVERSE_SE;
@@ -601,46 +866,115 @@ app.get("/api/screener", async (req, res) => {
       }
     }
 
-    for (const ticker of stockList) {
-      try {
-        // Fetch market data
-        const data = await yahooFinance.historical(ticker, {
-          period1: "2023-01-01",
-          interval: "1d"
-        });
+    const results = await Promise.all(
+      stockList.map(async (ticker) => {
+        try {
+          const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
 
-        if (!data || data.length < 50) continue;
+          // Try to get cached market data first
+          let cachedData = await getMarketData(ticker, startDate);
+          const needsFetch = !cachedData || cachedData.length === 0 ||
+                            !cachedData.some(c => c.date === today);
 
-        // Volume filter
-        if (!passesVolumeFilter(data)) continue;
+          let candles;
+          if (needsFetch) {
+            console.log(`Fetching fresh data for ${ticker} from Yahoo Finance...`);
+            const data = await yahooFinance.historical(ticker, {
+              period1: startDate,
+              interval: "1d"
+            });
 
-        // Compute features
-        const features = computeFeatures(data);
-        const ranking = computeRanking(features, data);
+            if (!data || data.length < 50) return null;
 
-        results.push({
-          ticker,
-          ranking,
-          features: {
-            regime: features.regime,
-            rsi14: features.rsi14,
-            relVol: features.relVol,
-            slope: features.slope
+            candles = data.map(d => ({
+              date: dayjs(d.date).format('YYYY-MM-DD'),
+              open: d.open,
+              high: d.high,
+              low: d.low,
+              close: d.close,
+              volume: d.volume
+            }));
+
+            await saveMarketData(ticker, candles);
+          } else {
+            candles = cachedData;
           }
-        });
-      } catch (e) {
-        console.warn(`Skipping ${ticker}:`, e.message);
-      }
-    }
 
-    // Sort by ranking desc
-    results.sort((a, b) => b.ranking - a.ranking);
+          if (candles.length < 50) return null;
+
+          const closes = candles.map(c => c.close);
+          const highs = candles.map(c => c.high);
+          const lows = candles.map(c => c.low);
+          const volumes = candles.map(c => c.volume);
+
+          const ema20Result = EMA.calculate({ period: 20, values: closes });
+          const ema50Result = EMA.calculate({ period: 50, values: closes });
+          const rsi14Result = RSI.calculate({ period: 14, values: closes });
+          const atr14Result = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 });
+
+          const lastEma20 = ema20Result[ema20Result.length - 1];
+          const lastEma50 = ema50Result[ema50Result.length - 1];
+          const lastRsi = rsi14Result[rsi14Result.length - 1];
+          const lastAtr = atr14Result[atr14Result.length - 1];
+          const lastClose = closes[closes.length - 1];
+          const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+          const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
+
+          let regime = "Consolidation";
+          if (lastEma20 > lastEma50 && lastClose > lastEma20) regime = "Bullish Trend";
+          else if (lastEma20 < lastEma50 && lastClose < lastEma20) regime = "Bearish Trend";
+
+          const setup = detectStrategy({
+            ema20: lastEma20,
+            ema50: lastEma50,
+            rsi14: lastRsi,
+            relativeVolume,
+            regime,
+            close: lastClose,
+            high: highs[highs.length - 1],
+            low: lows[lows.length - 1]
+          });
+
+          // Calculate edge score (0-10 scale)
+          let edgeScore = 5;
+          if (regime === "Bullish Trend") edgeScore += 2;
+          else if (regime === "Bearish Trend") edgeScore -= 2;
+          if (lastRsi >= 40 && lastRsi <= 60) edgeScore += 1;
+          if (lastRsi < 30 || lastRsi > 70) edgeScore -= 1;
+          if (relativeVolume > 1.5) edgeScore += 1;
+          if (relativeVolume < 0.8) edgeScore -= 0.5;
+          if (setup !== "Hold") edgeScore += 0.5;
+
+          const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+
+          return {
+            ticker,
+            price: lastClose,
+            ema20: lastEma20,
+            ema50: lastEma50,
+            rsi: lastRsi,
+            atr: lastAtr,
+            relativeVolume,
+            regime,
+            setup,
+            edgeScore: finalEdgeScore
+          };
+        } catch (e) {
+          console.warn(`Skipping ${ticker}:`, e.message);
+          return null;
+        }
+      })
+    );
+
+    // Filter out nulls and sort by edge score
+    const filtered = results.filter(r => r !== null);
+    filtered.sort((a, b) => b.edgeScore - a.edgeScore);
 
     // Cache results
-    screenerCache = results;
+    screenerCache = filtered;
     screenerCacheDate = today;
 
-    res.json(results);
+    res.json({ stocks: filtered });
   } catch (e) {
     console.error("Screener error:", e);
     res.status(500).json({ error: "Failed to run screener" });
@@ -662,7 +996,7 @@ app.get("/api/screener/stocks", async (req, res) => {
       .order('added_at', { ascending: false });
 
     if (error) throw error;
-    res.json(data || []);
+    res.json({ stocks: data || [] });
   } catch (e) {
     console.error("Get screener stocks error:", e);
     res.status(500).json({ error: "Failed to fetch screener stocks" });
@@ -886,6 +1220,468 @@ app.delete("/api/trades/:id", async (req, res) => {
   } catch (e) {
     console.error("Delete trade error:", e);
     res.status(500).json({ error: "Failed to delete trade" });
+  }
+});
+
+// ==================== WATCHLIST ====================
+
+// GET /api/watchlist - Hämta bevakningslistan
+app.get("/api/watchlist", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('watchlist')
+      .select('*')
+      .order('added_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ stocks: data || [] });
+  } catch (e) {
+    console.error("Get watchlist error:", e);
+    res.status(500).json({ error: "Failed to fetch watchlist" });
+  }
+});
+
+// POST /api/watchlist - Lägg till i bevakningslistan
+app.post("/api/watchlist", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker, indicators } = req.body;
+
+    if (!ticker) {
+      return res.status(400).json({ error: "Ticker is required" });
+    }
+
+    // Bygg initial snapshot
+    const today = dayjs().format('YYYY-MM-DD');
+    const insertData = {
+      ticker,
+      last_updated: today,
+      days_in_watchlist: 0
+    };
+
+    // Om indicators finns med (från frontend), spara initial snapshot
+    if (indicators) {
+      insertData.initial_price = indicators.price || null;
+      insertData.initial_ema20 = indicators.ema20 || null;
+      insertData.initial_ema50 = indicators.ema50 || null;
+      insertData.initial_rsi14 = indicators.rsi14 || null;
+      insertData.initial_regime = indicators.regime || null;
+      insertData.initial_setup = indicators.setup || null;
+
+      // Kör första statusuppdateringen direkt
+      if (indicators.ema20 && indicators.ema50 && indicators.rsi14) {
+        // Bygg input för watchlist-logik
+        const input = {
+          ticker,
+          price: {
+            close: indicators.price || 0,
+            high: indicators.price || 0,
+            low: indicators.price || 0
+          },
+          indicators: {
+            ema20: indicators.ema20,
+            ema50: indicators.ema50,
+            ema50_slope: 0.001, // Approximation - kan förbättras senare
+            rsi14: indicators.rsi14
+          },
+          volume: {
+            relVol: indicators.relativeVolume || 1
+          },
+          structure: {
+            higherLow: true // Default optimistisk
+          },
+          prevStatus: null,
+          daysInWatchlist: 0
+        };
+
+        const result = updateWatchlistStatus(input);
+
+        insertData.current_status = result.status;
+        insertData.current_action = result.action;
+        insertData.status_reason = result.reason;
+        insertData.dist_ema20_pct = parseFloat(result.diagnostics.distEma20Pct);
+        insertData.rsi_zone = result.diagnostics.rsiZone;
+        insertData.volume_state = result.diagnostics.volumeState;
+        insertData.time_warning = result.timeWarning;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('watchlist')
+      .insert(insertData)
+      .select();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "Already in watchlist" });
+      }
+      throw error;
+    }
+
+    res.status(201).json(data[0]);
+  } catch (e) {
+    console.error("Add to watchlist error:", e);
+    res.status(500).json({ error: "Failed to add to watchlist" });
+  }
+});
+
+// DELETE /api/watchlist/:ticker - Ta bort från bevakningslistan
+app.delete("/api/watchlist/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+
+    const { error } = await supabase
+      .from('watchlist')
+      .delete()
+      .eq('ticker', ticker);
+
+    if (error) throw error;
+    res.status(204).send();
+  } catch (e) {
+    console.error("Delete from watchlist error:", e);
+    res.status(500).json({ error: "Failed to delete from watchlist" });
+  }
+});
+
+// POST /api/watchlist/update - Uppdatera alla watchlist-statusar (daglig batch)
+app.post("/api/watchlist/update", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const today = dayjs().format('YYYY-MM-DD');
+
+    // Hämta alla aktier i watchlist
+    const { data: watchlistStocks, error: fetchError } = await supabase
+      .from('watchlist')
+      .select('*');
+
+    if (fetchError) throw fetchError;
+
+    if (!watchlistStocks || watchlistStocks.length === 0) {
+      return res.json({ message: "No stocks in watchlist", updated: 0 });
+    }
+
+    const updates = [];
+
+    // Uppdatera varje aktie
+    for (const stock of watchlistStocks) {
+      try {
+        const ticker = stock.ticker;
+
+        // Hämta fresh market data
+        const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
+        let cachedData = await getMarketData(ticker, startDate);
+        const needsFetch = !cachedData || cachedData.length === 0 ||
+                          !cachedData.some(c => c.date === today);
+
+        let candles;
+        if (needsFetch) {
+          console.log(`[Watchlist Update] Fetching fresh data for ${ticker}`);
+          const rawCandles = await yahooFinance.chart(ticker, {
+            period1: startDate,
+            period2: today
+          });
+
+          candles = rawCandles.quotes.map(q => ({
+            date: dayjs(q.date).format('YYYY-MM-DD'),
+            open: q.open,
+            high: q.high,
+            low: q.low,
+            close: q.close,
+            volume: q.volume
+          }));
+
+          await saveMarketData(ticker, candles);
+        } else {
+          candles = cachedData;
+        }
+
+        if (candles.length < 50) {
+          console.warn(`[Watchlist Update] Skipping ${ticker} - insufficient data`);
+          continue;
+        }
+
+        // Beräkna indikatorer
+        const closes = candles.map(c => c.close);
+        const highs = candles.map(c => c.high);
+        const lows = candles.map(c => c.low);
+        const volumes = candles.map(c => c.volume);
+
+        const ema20Result = EMA.calculate({ period: 20, values: closes });
+        const ema50Result = EMA.calculate({ period: 50, values: closes });
+        const rsi14Result = RSI.calculate({ period: 14, values: closes });
+
+        const ema20 = alignSeries(ema20Result, closes.length);
+        const ema50 = alignSeries(ema50Result, closes.length);
+        const rsi14 = alignSeries(rsi14Result, closes.length);
+
+        const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
+
+        // Bygg input för watchlist-logik
+        const input = buildWatchlistInput(
+          ticker,
+          candles,
+          { ema20, ema50, rsi14, relativeVolume },
+          stock.current_status,
+          stock.added_at
+        );
+
+        // Kör watchlist-logik
+        const result = updateWatchlistStatus(input);
+
+        // Uppdatera i databasen
+        const { error: updateError } = await supabase
+          .from('watchlist')
+          .update({
+            last_updated: today,
+            current_status: result.status,
+            current_action: result.action,
+            status_reason: result.reason,
+            dist_ema20_pct: parseFloat(result.diagnostics.distEma20Pct),
+            rsi_zone: result.diagnostics.rsiZone,
+            volume_state: result.diagnostics.volumeState,
+            time_warning: result.timeWarning,
+            days_in_watchlist: input.daysInWatchlist
+          })
+          .eq('ticker', ticker);
+
+        if (updateError) {
+          console.error(`[Watchlist Update] Error updating ${ticker}:`, updateError);
+        } else {
+          console.log(`[Watchlist Update] ✓ ${ticker} → ${result.status}`);
+          updates.push({
+            ticker,
+            status: result.status,
+            action: result.action,
+            reason: result.reason
+          });
+        }
+
+      } catch (stockError) {
+        console.error(`[Watchlist Update] Error processing ${stock.ticker}:`, stockError);
+      }
+    }
+
+    res.json({
+      message: "Watchlist updated successfully",
+      updated: updates.length,
+      total: watchlistStocks.length,
+      results: updates
+    });
+
+  } catch (e) {
+    console.error("Watchlist update error:", e);
+    res.status(500).json({ error: "Failed to update watchlist" });
+  }
+});
+
+// ==================== PORTFOLIO ====================
+
+// GET /api/portfolio - Hämta förvaltningslistan
+app.get("/api/portfolio", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('portfolio')
+      .select('*')
+      .order('added_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ stocks: data || [] });
+  } catch (e) {
+    console.error("Get portfolio error:", e);
+    res.status(500).json({ error: "Failed to fetch portfolio" });
+  }
+});
+
+// POST /api/portfolio - Lägg till i förvaltningslistan
+app.post("/api/portfolio", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker, entry_price, quantity } = req.body;
+
+    const { data, error } = await supabase
+      .from('portfolio')
+      .insert({ ticker, entry_price, quantity })
+      .select();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "Already in portfolio" });
+      }
+      throw error;
+    }
+
+    res.status(201).json(data[0]);
+  } catch (e) {
+    console.error("Add to portfolio error:", e);
+    res.status(500).json({ error: "Failed to add to portfolio" });
+  }
+});
+
+// DELETE /api/portfolio/:ticker - Ta bort från förvaltningslistan
+app.delete("/api/portfolio/:ticker", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    const { ticker } = req.params;
+
+    const { error } = await supabase
+      .from('portfolio')
+      .delete()
+      .eq('ticker', ticker);
+
+    if (error) throw error;
+    res.status(204).send();
+  } catch (e) {
+    console.error("Delete from portfolio error:", e);
+    res.status(500).json({ error: "Failed to delete from portfolio" });
+  }
+});
+
+// POST /api/portfolio/update - Daglig uppdatering av förvaltningslistan
+app.post("/api/portfolio/update", async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: "Database not configured" });
+  }
+
+  try {
+    console.log('[Portfolio Update] Starting daily portfolio update...');
+
+    // Hämta alla positioner
+    const { data: positions, error: fetchError } = await supabase
+      .from('portfolio')
+      .select('*');
+
+    if (fetchError) throw fetchError;
+
+    if (!positions || positions.length === 0) {
+      return res.json({ message: "No positions to update", updated: 0 });
+    }
+
+    const { updatePositionStatus, buildPositionInput } = await import('./lib/portfolioLogic.js');
+    let updated = 0;
+
+    for (const position of positions) {
+      try {
+        console.log(`[Portfolio Update] Updating ${position.ticker}...`);
+
+        // Hämta färsk data från Yahoo Finance
+        const historical = await yahooFinance.historical(position.ticker, {
+          period1: dayjs().subtract(6, 'month').format('YYYY-MM-DD'),
+          period2: dayjs().format('YYYY-MM-DD'),
+          interval: '1d'
+        });
+
+        if (!historical || historical.length === 0) {
+          console.error(`[Portfolio Update] No data for ${position.ticker}`);
+          continue;
+        }
+
+        const candles = historical.map(d => ({
+          date: dayjs(d.date).format('YYYY-MM-DD'),
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+          volume: d.volume
+        }));
+
+        // Beräkna indikatorer
+        const closes = candles.map(c => c.close);
+        const ema20Result = EMA.calculate({ period: 20, values: closes });
+        const ema50Result = EMA.calculate({ period: 50, values: closes });
+        const rsi14Result = RSI.calculate({ period: 14, values: closes });
+
+        const ema20 = ema20Result.map(v => parseFloat(v.toFixed(2)));
+        const ema50 = ema50Result.map(v => parseFloat(v.toFixed(2)));
+        const rsi14 = rsi14Result.map(v => parseFloat(v.toFixed(2)));
+
+        // Beräkna relativ volym
+        const lastCandle = candles[candles.length - 1];
+        const avgVolume = candles.slice(-20).reduce((sum, c) => sum + c.volume, 0) / 20;
+        const relativeVolume = avgVolume > 0 ? lastCandle.volume / avgVolume : 1.0;
+
+        const indicators = {
+          ema20,
+          ema50,
+          rsi14,
+          relativeVolume
+        };
+
+        // Bygg input för portfolioLogic
+        const input = buildPositionInput(position.ticker, position, candles, indicators);
+
+        // Beräkna ny status
+        const result = updatePositionStatus(input);
+
+        // Beräkna PnL amount
+        const pnlAmount = position.quantity
+          ? (lastCandle.close - position.entry_price) * position.quantity
+          : 0;
+
+        // Uppdatera i databasen
+        const { error: updateError } = await supabase
+          .from('portfolio')
+          .update({
+            current_price: lastCandle.close,
+            current_stop: result.currentStop,
+            current_ema20: ema20[ema20.length - 1],
+            current_ema50: ema50[ema50.length - 1],
+            current_rsi14: rsi14[rsi14.length - 1],
+            current_volume_rel: parseFloat(relativeVolume.toFixed(2)),
+            pnl_pct: result.pnlPct,
+            pnl_amount: parseFloat(pnlAmount.toFixed(2)),
+            r_multiple: result.rMultiple,
+            days_in_trade: result.daysInTrade,
+            current_status: result.status,
+            exit_signal: result.signal,
+            last_updated: dayjs().format('YYYY-MM-DD')
+          })
+          .eq('ticker', position.ticker);
+
+        if (updateError) {
+          console.error(`[Portfolio Update] Error updating ${position.ticker}:`, updateError);
+          continue;
+        }
+
+        console.log(`[Portfolio Update] ✓ ${position.ticker} → ${result.status}`);
+        updated++;
+      } catch (e) {
+        console.error(`[Portfolio Update] Error processing ${position.ticker}:`, e);
+      }
+    }
+
+    res.json({
+      message: `Portfolio updated successfully`,
+      updated,
+      total: positions.length
+    });
+  } catch (e) {
+    console.error("[Portfolio Update] Error:", e);
+    res.status(500).json({ error: "Failed to update portfolio" });
   }
 });
 
