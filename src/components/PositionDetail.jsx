@@ -398,29 +398,19 @@ export default function PositionDetail({ ticker, onBack }) {
       {/* ============================================ */}
       {/* 1️⃣ HEADER - POSITION SNAPSHOT */}
       {/* ============================================ */}
-      <header className="header" style={{
-        marginBottom: "16px",
-        flexDirection: "column",
-        gap: "8px",
-        background: "white",
-        padding: "12px 16px",
-        borderRadius: "8px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
-      }}>
-        <div style={{ width: "100%" }}>
-          <p className="eyebrow" style={{ fontSize: "10px", marginBottom: "4px" }}>POSITION DETAIL</p>
+      <header className="header">
+        <div>
+          <p className="eyebrow">Position Detail</p>
           <h1 style={{
-            fontSize: "clamp(20px, 4.5vw, 26px)",
-            margin: "0 0 8px 0",
             display: "flex",
             alignItems: "center",
-            gap: "6px",
+            gap: "8px",
             flexWrap: "wrap"
           }}>
             {ticker}
-            <span style={{ fontSize: "clamp(18px, 3.5vw, 24px)" }}>{statusIcon}</span>
+            <span style={{ fontSize: "24px" }}>{statusIcon}</span>
             <span style={{
-              fontSize: "clamp(13px, 2.5vw, 16px)",
+              fontSize: "16px",
               fontWeight: "600",
               color: "#64748b"
             }}>
@@ -428,106 +418,55 @@ export default function PositionDetail({ ticker, onBack }) {
             </span>
           </h1>
 
-          {/* Compact metrics - Responsive grid */}
+          {/* Compact metrics */}
           <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))",
-            gap: "8px",
-            marginTop: "0",
+            display: "flex",
+            gap: "16px",
+            marginTop: "8px",
             fontSize: "13px",
-            fontWeight: "600"
+            fontWeight: "600",
+            flexWrap: "wrap"
           }}>
             <div>
-              <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>R:</span>
+              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>R:</span>
               <span style={{ color: rColor, fontVariantNumeric: "tabular-nums" }}>
                 {rMultiple > 0 ? '+' : ''}{rMultiple.toFixed(1)}R
               </span>
             </div>
             <div>
-              <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>PnL:</span>
+              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>PnL:</span>
               <span style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
                 {pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
               </span>
             </div>
             <div>
-              <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>Dagar:</span>
+              <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>Dagar:</span>
               <span style={{ color: "#0f172a" }}>{daysInTrade}d</span>
             </div>
             {position.entry_date && (
               <div>
-                <span style={{ color: "#64748b", fontSize: "10px", marginRight: "3px" }}>Entry:</span>
-                <span style={{ color: "#0f172a", fontSize: "11px" }}>{position.entry_date}</span>
+                <span style={{ color: "#64748b", fontSize: "11px", marginRight: "4px" }}>Entry:</span>
+                <span style={{ color: "#0f172a" }}>{position.entry_date}</span>
               </div>
             )}
           </div>
         </div>
 
-        <div style={{
-          display: "flex",
-          gap: "8px",
-          width: "100%",
-          flexWrap: "wrap"
-        }}>
-          <button
-            onClick={onBack}
-            style={{
-              flex: "0 0 auto",
-              padding: "6px 12px",
-              background: "transparent",
-              border: "1px solid #e2e8f0",
-              borderRadius: "6px",
-              fontSize: "13px",
-              fontWeight: "500",
-              color: "#64748b",
-              cursor: "pointer",
-              transition: "all 0.15s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "#f8fafc";
-              e.target.style.color = "#0f172a";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "transparent";
-              e.target.style.color = "#64748b";
-            }}
-          >
-            <span style={{ fontSize: "14px" }}>←</span>
-            <span>Dashboard</span>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button className="ghost" onClick={onBack}>
+            ← Dashboard
           </button>
           {!isExited && (
             <button
+              className="ghost"
               style={{
-                flex: "0 0 auto",
-                padding: "6px 12px",
-                background: "transparent",
-                border: "1px solid " + (showExitForm ? "#64748b" : "#fca5a5"),
-                borderRadius: "6px",
-                fontSize: "13px",
-                fontWeight: "500",
-                color: showExitForm ? "#64748b" : "#dc2626",
-                cursor: "pointer",
-                transition: "all 0.15s",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px"
+                background: showExitForm ? "transparent" : "#fef2f2",
+                borderColor: showExitForm ? "#e2e8f0" : "#fca5a5",
+                color: showExitForm ? "#64748b" : "#dc2626"
               }}
               onClick={() => setShowExitForm(!showExitForm)}
-              onMouseEnter={(e) => {
-                e.target.style.background = showExitForm ? "#f1f5f9" : "#fef2f2";
-                e.target.style.color = showExitForm ? "#0f172a" : "#b91c1c";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = "transparent";
-                e.target.style.color = showExitForm ? "#64748b" : "#dc2626";
-              }}
             >
-              <span style={{ fontSize: "14px" }}>{showExitForm ? "✕" : "⬆"}</span>
-              <span>{showExitForm ? "Stäng" : "Exit"}</span>
+              {showExitForm ? "✕ Stäng" : "⬆ Exit"}
             </button>
           )}
         </div>
