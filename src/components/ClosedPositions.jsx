@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { calculatePnlKr, calculateDaysInTrade } from '../../utils/calculations.js';
 
 export default function ClosedPositions({ onSelectPosition, onBack }) {
   const [positions, setPositions] = useState([]);
@@ -67,12 +68,8 @@ export default function ClosedPositions({ onSelectPosition, onBack }) {
     const rows = positions.map(p => {
       const entryDate = p.entry_date || '';
       const exitDate = p.exit_date || '';
-      const daysInTrade = entryDate && exitDate
-        ? Math.ceil((new Date(exitDate) - new Date(entryDate)) / (1000 * 60 * 60 * 24))
-        : '';
-      const pnlKr = p.quantity && p.exit_price && p.entry_price
-        ? p.quantity * (p.exit_price - p.entry_price)
-        : '';
+      const daysInTrade = calculateDaysInTrade(entryDate, exitDate) || '';
+      const pnlKr = calculatePnlKr(p.quantity, p.entry_price, p.exit_price) || '';
 
       return [
         p.ticker || '',

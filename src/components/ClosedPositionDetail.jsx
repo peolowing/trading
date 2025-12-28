@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { calculatePnlKr, calculateDaysInTrade, getRMultipleColor, getPercentColor } from '../../utils/calculations.js';
 
 export default function ClosedPositionDetail({ ticker, onBack }) {
   const [position, setPosition] = useState(null);
@@ -102,24 +103,18 @@ export default function ClosedPositionDetail({ ticker, onBack }) {
     );
   }
 
-  // Calculations
+  // Calculations - Using utils/calculations.js
   const rMultiple = position.r_multiple || 0;
   const pnlPct = position.pnl_pct || 0;
-  const rColor = rMultiple > 0 ? '#16a34a' : rMultiple < 0 ? '#dc2626' : '#64748b';
-  const pnlColor = pnlPct > 0 ? '#16a34a' : pnlPct < 0 ? '#dc2626' : '#64748b';
+  const rColor = getRMultipleColor(rMultiple);
+  const pnlColor = getPercentColor(pnlPct);
   const resultIcon = rMultiple > 0 ? '🟢' : '🔴';
 
-  // PnL i kronor
-  const pnlKr = position.quantity && position.exit_price && position.entry_price
-    ? position.quantity * (position.exit_price - position.entry_price)
-    : 0;
+  // PnL i kronor - Using calculations.js
+  const pnlKr = calculatePnlKr(position.quantity, position.entry_price, position.exit_price);
 
-  // Days in trade
-  const entryDate = position.entry_date ? new Date(position.entry_date) : null;
-  const exitDate = position.exit_date ? new Date(position.exit_date) : null;
-  const daysInTrade = entryDate && exitDate
-    ? Math.ceil((exitDate - entryDate) / (1000 * 60 * 60 * 24))
-    : '—';
+  // Days in trade - Using calculations.js
+  const daysInTrade = calculateDaysInTrade(position.entry_date, position.exit_date) || '—';
 
   return (
     <div className="container">
