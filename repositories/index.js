@@ -14,6 +14,7 @@ import * as watchlistRepo from './watchlist.repository.js';
 import * as backtestRepo from './backtest.repository.js';
 import * as marketdataRepo from './marketdata.repository.js';
 import * as screenerRepo from './screener.repository.js';
+import * as agentsRepo from './agents.repository.js';
 
 export {
   portfolioRepo,
@@ -21,5 +22,6 @@ export {
   watchlistRepo,
   backtestRepo,
   marketdataRepo,
-  screenerRepo
+  screenerRepo,
+  agentsRepo
 };

@@ -14,6 +14,7 @@ import Dashboard from "./components/Dashboard";
 import PositionDetail from "./components/PositionDetail";
 import ClosedPositions from "./components/ClosedPositions";
 import ClosedPositionDetail from "./components/ClosedPositionDetail";
+import AgentsDashboard from "./components/AgentsDashboard";
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -128,6 +129,11 @@ export default function App() {
     );
   }
 
+  // Render Agents Dashboard if that view is selected
+  if (currentView === "agents") {
+    return <AgentsDashboard onBack={() => setCurrentView("dashboard")} />;
+  }
+
   // Analysis view - shown when a stock is selected
   if (loading || !data) return (
     <div className="container">
@@ -235,15 +241,15 @@ export default function App() {
           <div>
             <p className="eyebrow">Edge-score</p>
             <div className="score-number">
-              <span>{scoring?.score?.toFixed(1) || "N/A"}</span>
-              <small>/10</small>
+              <span>{scoring?.score?.toFixed(0) || "N/A"}</span>
+              <small>/100</small>
             </div>
             <span className="tag">{scoring?.label || "Okänd"}</span>
           </div>
           <div className="score-bar">
             <div
               className="score-fill"
-              style={{ width: `${((scoring?.score || 0) / 10) * 100}%` }}
+              style={{ width: `${((scoring?.score || 0) / 100) * 100}%` }}
             />
           </div>
         </div>

@@ -208,7 +208,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
         `Vill du lägga till ${ticker} i bevakning?\n\n` +
         `Pris: ${price?.toFixed(2) || 'N/A'} kr\n` +
         `Setup: ${setup}\n` +
-        `Edge Score: ${(edgeScore * 10).toFixed(0)}/100`
+        `Edge Score: ${edgeScore.toFixed(0)}/100`
       );
 
       if (confirm) {
@@ -236,6 +236,24 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
           <p className="eyebrow">Veckotrading AI</p>
           <h1>📈 Dashboard</h1>
         </div>
+        <button
+          onClick={() => onNavigate("agents")}
+          style={{
+            padding: "10px 20px",
+            background: "#3b82f6",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }}
+        >
+          🤖 Trading Agents
+        </button>
       </header>
 
 
@@ -778,6 +796,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <tr style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     <th style={{ padding: "8px 12px", textAlign: "left" }}>#</th>
                     <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>Segment</th>
                     <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
                     <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms.</th>
                     <th style={{ padding: "8px 12px", textAlign: "center" }}>Trend</th>
@@ -790,11 +809,11 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   </tr>
                 </thead>
                 <tbody>
-                  {screenerData.slice(0, 15).map((item, idx) => {
-                    const edgeScore = item.edgeScore || 5;
+                  {screenerData.map((item, idx) => {
+                    const edgeScore = item.edgeScore || 50; // Backend now uses 0-100 scale
                     let scoreColor = "#dc2626";
-                    if (edgeScore >= 7) scoreColor = "#16a34a";
-                    else if (edgeScore >= 5) scoreColor = "#f59e0b";
+                    if (edgeScore >= 70) scoreColor = "#16a34a";
+                    else if (edgeScore >= 50) scoreColor = "#f59e0b";
 
                     const trendIcon = item.regime === "Bullish Trend" ? "▲" : item.regime === "Bearish Trend" ? "▼" : "→";
                     const trendColor = item.regime === "Bullish Trend" ? "#16a34a" : item.regime === "Bearish Trend" ? "#dc2626" : "#64748b";
@@ -841,6 +860,19 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         <td style={{ padding: "10px 12px" }}>
                           <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
                         </td>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <span style={{
+                            fontSize: "10px",
+                            fontWeight: "700",
+                            color: item.bucket === "LARGE_CAP" ? "#3b82f6" : "#8b5cf6",
+                            background: item.bucket === "LARGE_CAP" ? "#dbeafe" : "#ede9fe",
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            letterSpacing: "0.025em"
+                          }}>
+                            {item.bucket === "LARGE_CAP" ? "LARGE" : "MID"}
+                          </span>
+                        </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                           {item.price?.toFixed(2) || "N/A"}
                         </td>
@@ -882,7 +914,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                             color: scoreColor,
                             fontSize: "14px"
                           }}>
-                            {(edgeScore * 10).toFixed(0)}
+                            {edgeScore.toFixed(0)}
                           </span>
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}>

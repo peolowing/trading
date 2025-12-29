@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import yahooFinance from "yahoo-finance2";
-import { EMA, RSI, ATR } from "technicalindicators";
+import { EMA, SMA, RSI, ATR } from "technicalindicators";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
@@ -13,7 +13,8 @@ import {
   watchlistRepo,
   backtestRepo,
   marketdataRepo,
-  screenerRepo
+  screenerRepo,
+  agentsRepo
 } from "./repositories/index.js";
 import {
   positionService,
@@ -543,33 +544,61 @@ app.post("/api/analyze", async (req, res) => {
       setup
     };
 
-    // Calculate edge score (0-10 scale)
-    let edgeScore = 5;
-    if (regime === "Bullish Trend") edgeScore += 2;
-    else if (regime === "Bearish Trend") edgeScore -= 2;
-    if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
-    if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
-    if (relativeVolume > 1.5) edgeScore += 1;
-    if (relativeVolume < 0.8) edgeScore -= 0.5;
-    if (setup !== "Hold") edgeScore += 0.5;
+    // Get bucket classification from database (Nasdaq Stockholm list)
+    let bucket = "UNKNOWN";
+    if (ticker && screenerRepo.hasDatabase()) {
+      try {
+        const stockInfo = await screenerRepo.findByTicker(ticker);
+        if (stockInfo && stockInfo.bucket) {
+          bucket = stockInfo.bucket;
+        }
+      } catch (err) {
+        console.warn(`Could not fetch bucket for ${ticker}:`, err.message);
+      }
+    }
 
-    const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+    // Compute features for ranking
+    const ema20Series = EMA.calculate({ period: 20, values: closes });
+    const slope = ema20Series.length >= 10
+      ? (ema20Series.at(-1) - ema20Series.at(-10)) / ema20Series.at(-10)
+      : 0;
+
+    const features = {
+      ema20: lastEma20,
+      ema50: lastEma50,
+      rsi14: indicators.rsi14,
+      atr14: indicators.atr14,
+      close: lastClose,
+      relVol: relativeVolume,
+      regime: regime === "Bullish Trend" ? "UPTREND" : regime === "Bearish Trend" ? "DOWNTREND" : "CONSOLIDATION",
+      slope
+    };
+
+    // Use computeRanking for consistent scoring (0-100 scale)
+    const finalEdgeScore = bucket !== "UNKNOWN"
+      ? computeRanking(features, candles, bucket)
+      : 50; // Default if no bucket
 
     const scoring = {
       score: finalEdgeScore,
-      label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+      total: finalEdgeScore, // For backward compatibility
+      label: finalEdgeScore >= 70 ? "Strong Edge" : finalEdgeScore >= 50 ? "OK" : "Weak Edge",
+      bucket: bucket
     };
 
-    // Run backtest with detected strategy
+    // Run backtest - always run, even for "Hold" setup
     const today = dayjs().format('YYYY-MM-DD');
     let backtestResult = null;
 
-    if (ticker && setup !== "Hold") {
+    if (ticker) {
+      // Use best available strategy for backtest, default to "Trend Following" if Hold
+      const backtestStrategy = setup !== "Hold" ? setup : "Trend Following";
+
       // Try to get cached backtest results first
-      const cached = await getBacktestResults(ticker, today, setup);
+      const cached = await getBacktestResults(ticker, today, backtestStrategy);
       if (cached) {
         backtestResult = {
-          strategy: setup,
+          strategy: backtestStrategy,
           stats: {
             trades: cached.total_signals,
             winRate: cached.win_rate,
@@ -582,11 +611,11 @@ app.post("/api/analyze", async (req, res) => {
         };
       } else {
         // Run fresh backtest
-        const bt = runBacktest(candles, setup);
+        const bt = runBacktest(candles, backtestStrategy);
         await saveBacktestResults(ticker, today, bt);
 
         backtestResult = {
-          strategy: setup,
+          strategy: backtestStrategy,
           stats: {
             trades: bt.totalSignals,
             winRate: bt.winRate,
@@ -737,24 +766,38 @@ Ge ditt svar i exakt följande format:
 });
 
 // ==================== SCREENER ====================
+// Mix av Large-cap (~20) och Mid-cap (~20) baserat på backtest-resultat
 const UNIVERSE_SE = [
+  // Large-cap (OMXS Large Cap)
   "VOLV-B.ST", "ATCO-A.ST", "ATCO-B.ST", "SAND.ST", "ABB.ST",
-  "INVE-A.ST", "INVE-B.ST", "ASSA-B.ST", "SKF-B.ST",
-  "SEB-A.ST", "SWED-A.ST", "SHB-A.ST", "ERIC-B.ST"
+  "ASSA-B.ST", "ERIC-B.ST", "HM-B.ST", "ALIV-SDB.ST",
+  "SEB-A.ST", "SWED-A.ST", "SHB-A.ST", "NDA-SE.ST",
+  "INVE-A.ST", "INVE-B.ST", "KINV-B.ST",
+  "SKF-B.ST", "SSAB-A.ST", "BOL.ST", "TELIA.ST",
+
+  // Mid-cap (OMXS Mid Cap)
+  "ESSITY-B.ST", "ELUX-B.ST", "NIBE-B.ST", "ALFA.ST",
+  "GETI-B.ST", "EPI-B.ST", "HUSQ-B.ST", "INDU-A.ST",
+  "LUND-B.ST", "SECU-B.ST", "AXFO.ST", "CAST.ST",
+  "FABG.ST", "HEBA-B.ST", "LIFCO-B.ST", "LOOMIS.ST",
+  "NCC-B.ST", "PEAB-B.ST", "SWEC-B.ST", "TREL-B.ST"
 ];
 
 let screenerCache = null;
 let screenerCacheDate = null;
 
 // Volume filter: turnover (close * volume), relative volume, stability
+// Returns true if passes hard filters, false otherwise
+// Bucket classification comes from database (based on Nasdaq Stockholm list)
 function passesVolumeFilter(candles) {
   if (!candles || candles.length < 20) return false;
 
   const last = candles.at(-1);
   const turnoverSEK = last.close * last.volume;
+  const turnoverM = turnoverSEK / 1_000_000;
 
-  // Turnover > 30M SEK
-  if (turnoverSEK < 30_000_000) return false;
+  // Minimum turnover threshold (15M SEK/day)
+  if (turnoverM < 15) return false;
 
   // Relative volume
   const volumes = candles.slice(-20).map(c => c.volume);
@@ -767,8 +810,8 @@ function passesVolumeFilter(candles) {
   const stdDev = Math.sqrt(variance);
   const cv = stdDev / mean; // coefficient of variation
 
-  // Skip if too unstable (cv > 1.0 means volume varies wildly)
-  if (cv > 1.0) return false;
+  // Höjt från 1.0 till 1.2 för att tillåta något mer volatila mid-cap
+  if (cv > 1.2) return false;
 
   return true;
 }
@@ -782,6 +825,8 @@ function computeFeatures(candles) {
 
   const ema20 = EMA.calculate({ period: 20, values: closes }).at(-1);
   const ema50 = EMA.calculate({ period: 50, values: closes }).at(-1);
+  const sma50 = SMA.calculate({ period: 50, values: closes }).at(-1);
+  const sma200 = SMA.calculate({ period: 200, values: closes }).at(-1);
   const rsi14 = RSI.calculate({ period: 14, values: closes }).at(-1);
   const atr14 = ATR.calculate({ period: 14, high: highs, low: lows, close: closes }).at(-1);
 
@@ -797,25 +842,28 @@ function computeFeatures(candles) {
     ? (ema20Series.at(-1) - ema20Series.at(-10)) / ema20Series.at(-10)
     : 0;
 
-  return { ema20, ema50, rsi14, atr14, close, relVol, regime, slope };
+  return { ema20, ema50, sma50, sma200, rsi14, atr14, close, relVol, regime, slope };
 }
 
 // Ranking: 0-100 score
-function computeRanking(features, candles) {
+// STEG 2: Justerad med högre trend-vikt och mid-cap ATR-straff
+function computeRanking(features, candles, bucket) {
   let score = 0;
 
-  // 1. Liquidity (30 pts)
+  // 1. Liquidity (30 pts) - justerat för mid-cap
   const last = candles.at(-1);
   const turnoverM = (last.close * last.volume) / 1_000_000;
-  if (turnoverM > 200) score += 30;
-  else if (turnoverM > 100) score += 20;
-  else if (turnoverM > 30) score += 10;
+  if (turnoverM > 200) score += 30;      // Large-cap
+  else if (turnoverM > 100) score += 25; // Large-cap
+  else if (turnoverM > 50) score += 20;  // Large/Mid-cap
+  else if (turnoverM > 30) score += 15;  // Mid-cap
+  else if (turnoverM > 15) score += 10;  // Mid-cap
 
-  // 2. Trend (30 pts)
+  // 2. Trend (30 pts) - ÖKA BETYDELSE från 15→18 baspoäng
   if (features.regime === "UPTREND") {
-    score += 15;
-    if (features.slope > 0.05) score += 10; // strong uptrend
-    else if (features.slope > 0) score += 5;
+    score += 18; // Istället för 15
+    if (features.slope > 0.05) score += 12; // Istället för 10
+    else if (features.slope > 0) score += 6; // Istället för 5
   } else {
     if (features.slope < -0.05) score -= 5; // penalize strong downtrend
   }
@@ -825,6 +873,11 @@ function computeRanking(features, candles) {
   if (atrPct >= 0.02 && atrPct <= 0.05) score += 20; // sweet spot
   else if (atrPct > 0.05) score += 10; // high volatility ok
   else score += 5; // low volatility less interesting
+
+  // STEG 2: Straffa Mid Cap med låg ATR
+  if (bucket === "MID_CAP" && atrPct < 0.018) {
+    score -= 10;
+  }
 
   // 4. Momentum (20 pts)
   if (features.rsi14 >= 40 && features.rsi14 <= 60) score += 15; // neutral/bullish
@@ -836,7 +889,112 @@ function computeRanking(features, candles) {
   return Math.max(0, Math.min(100, score));
 }
 
+// ===== TRADING AGENTS DETECTION =====
+
+/**
+ * Detect Trend + Pullback setup
+ * Criteria:
+ * - Close > SMA200 (long-term uptrend)
+ * - SMA50 > SMA200 (medium-term uptrend)
+ * - Pullback 2-6 days toward EMA20
+ * - Volume hasn't collapsed (relVol > 0.5)
+ * - RSI 30-50 (oversold to neutral)
+ */
+function detectTrendPullback(candles) {
+  if (!candles || candles.length < 210) return null; // Need 200+ days for SMA200
+
+  const closes = candles.map(c => c.close);
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+  const volumes = candles.map(c => c.volume);
+
+  // Calculate indicators
+  const sma200Series = SMA.calculate({ period: 200, values: closes });
+  const sma50Series = SMA.calculate({ period: 50, values: closes });
+  const ema20Series = EMA.calculate({ period: 20, values: closes });
+  const rsiSeries = RSI.calculate({ period: 14, values: closes });
+
+  const lastClose = closes.at(-1);
+  const lastSMA200 = sma200Series.at(-1);
+  const lastSMA50 = sma50Series.at(-1);
+  const lastEMA20 = ema20Series.at(-1);
+  const lastRSI = rsiSeries.at(-1);
+
+  // 1. Check trend conditions
+  if (lastClose <= lastSMA200) return null;  // Close must be above SMA200
+  if (lastSMA50 <= lastSMA200) return null;  // SMA50 must be above SMA200
+
+  // 2. Count pullback days (days below EMA20)
+  let pullbackDays = 0;
+  const recentCloses = closes.slice(-10); // Look at last 10 days
+  const recentEMA20 = ema20Series.slice(-10);
+
+  for (let i = recentCloses.length - 1; i >= 0; i--) {
+    if (recentCloses[i] < recentEMA20[i]) {
+      pullbackDays++;
+    } else {
+      break;  // Exit when price was above EMA20
+    }
+  }
+
+  // 3. Check if in pullback range (2-6 days)
+  if (pullbackDays < 2 || pullbackDays > 6) return null;
+
+  // 4. Check volume hasn't collapsed
+  const avgVolume = volumes.slice(-20).reduce((a, b) => a + b) / 20;
+  const currentVolume = volumes.at(-1);
+  const relVol = currentVolume / avgVolume;
+
+  if (relVol < 0.5) return null;  // Volume too low
+
+  // 5. Check RSI
+  if (lastRSI < 30 || lastRSI > 50) return null;
+
+  // ✓ All criteria met! Calculate strength
+  const strength = calculatePullbackStrength(pullbackDays, relVol, lastRSI);
+
+  // Calculate entry, stop, target
+  const recentLows = lows.slice(-pullbackDays);
+  const recentLow = Math.min(...recentLows);
+  const atr14 = ATR.calculate({ period: 14, high: highs, low: lows, close: closes }).at(-1);
+
+  return {
+    type: "TREND_PULLBACK",
+    pullbackDays,
+    relativeVolume: parseFloat(relVol.toFixed(2)),
+    rsi: parseFloat(lastRSI.toFixed(1)),
+    entry: parseFloat(lastClose.toFixed(2)),
+    stop: parseFloat(recentLow.toFixed(2)),
+    target: parseFloat((lastClose + (lastClose - recentLow) * 2).toFixed(2)), // 2:1 R/R
+    strength: Math.round(strength),
+    atr: parseFloat(atr14.toFixed(2))
+  };
+}
+
+/**
+ * Calculate strength score for Trend + Pullback setup
+ * @returns {number} 0-100
+ */
+function calculatePullbackStrength(pullbackDays, relVol, rsi) {
+  let strength = 50;  // Base
+
+  // Optimal pullback duration (3-4 days)
+  if (pullbackDays >= 3 && pullbackDays <= 4) strength += 20;
+  else if (pullbackDays === 2 || pullbackDays === 5) strength += 10;
+
+  // Volume strength
+  if (relVol > 1.0) strength += 15;
+  else if (relVol > 0.75) strength += 10;
+
+  // RSI sweet spot (35-45)
+  if (rsi >= 35 && rsi <= 45) strength += 15;
+  else if (rsi >= 30 && rsi <= 50) strength += 5;
+
+  return Math.min(100, strength);
+}
+
 // GET /api/screener
+// STEG 3: Deterministisk bucket-baserad selection (alltid 20+20)
 app.get("/api/screener", async (req, res) => {
   try {
     const today = dayjs().format("YYYY-MM-DD");
@@ -849,25 +1007,33 @@ app.get("/api/screener", async (req, res) => {
 
     console.log("Running fresh screener...");
 
-    // Get dynamic stock list from database, fallback to hardcoded list
-    let stockList = UNIVERSE_SE;
+    // Get dynamic stock list WITH bucket from database, fallback to hardcoded list
+    let stocksWithBucket = [];
 
     if (screenerRepo.hasDatabase()) {
       try {
         const dbStocks = await screenerRepo.findAllActive();
         if (dbStocks && dbStocks.length > 0) {
-          stockList = dbStocks.map(s => s.ticker);
-          console.log(`Using ${stockList.length} stocks from database`);
+          // Map to include bucket from database
+          stocksWithBucket = dbStocks.map(s => ({
+            ticker: s.ticker,
+            bucket: s.bucket || "UNKNOWN"
+          }));
+          console.log(`Using ${stocksWithBucket.length} stocks from database`);
         } else {
           console.log(`Using ${UNIVERSE_SE.length} stocks from hardcoded list (fallback)`);
+          stocksWithBucket = UNIVERSE_SE.map(t => ({ ticker: t, bucket: "UNKNOWN" }));
         }
       } catch (dbError) {
         console.warn("Failed to fetch stocks from database, using fallback:", dbError.message);
+        stocksWithBucket = UNIVERSE_SE.map(t => ({ ticker: t, bucket: "UNKNOWN" }));
       }
+    } else {
+      stocksWithBucket = UNIVERSE_SE.map(t => ({ ticker: t, bucket: "UNKNOWN" }));
     }
 
     const results = await Promise.all(
-      stockList.map(async (ticker) => {
+      stocksWithBucket.map(async ({ ticker, bucket }) => {
         try {
           const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
 
@@ -902,6 +1068,20 @@ app.get("/api/screener", async (req, res) => {
 
           if (candles.length < 50) return null;
 
+          // Apply hard volume filters
+          const passesFilters = passesVolumeFilter(candles);
+          if (!passesFilters) return null; // Filtreras bort
+
+          // Bucket comes from database (Nasdaq Stockholm list classification)
+          // bucket is already available from the map parameter
+
+          // Beräkna features för ranking
+          const features = computeFeatures(candles);
+
+          // STEG 2: Beräkna edge score (0-100) med justerade vikter
+          const edgeScore = computeRanking(features, candles, bucket);
+
+          // Beräkna övrig data för UI
           const closes = candles.map(c => c.close);
           const highs = candles.map(c => c.high);
           const lows = candles.map(c => c.low);
@@ -935,18 +1115,6 @@ app.get("/api/screener", async (req, res) => {
             low: lows[lows.length - 1]
           });
 
-          // Calculate edge score (0-10 scale)
-          let edgeScore = 5;
-          if (regime === "Bullish Trend") edgeScore += 2;
-          else if (regime === "Bearish Trend") edgeScore -= 2;
-          if (lastRsi >= 40 && lastRsi <= 60) edgeScore += 1;
-          if (lastRsi < 30 || lastRsi > 70) edgeScore -= 1;
-          if (relativeVolume > 1.5) edgeScore += 1;
-          if (relativeVolume < 0.8) edgeScore -= 0.5;
-          if (setup !== "Hold") edgeScore += 0.5;
-
-          const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
-
           // Calculate turnover in MSEK
           const lastVolume = candles.at(-1).volume;
           const turnoverMSEK = (lastClose * lastVolume) / 1_000_000;
@@ -963,7 +1131,8 @@ app.get("/api/screener", async (req, res) => {
             relativeVolume,
             regime,
             setup,
-            edgeScore: finalEdgeScore
+            edgeScore, // Nu 0-100 istället för 0-10
+            bucket // LARGE_CAP eller MID_CAP
           };
         } catch (e) {
           console.warn(`Skipping ${ticker}:`, e.message);
@@ -972,15 +1141,30 @@ app.get("/api/screener", async (req, res) => {
       })
     );
 
-    // Filter out nulls and sort by edge score
-    const filtered = results.filter(r => r !== null);
-    filtered.sort((a, b) => b.edgeScore - a.edgeScore);
+    // STEG 3: Deterministisk bucket selection - alltid 20+20
+    const candidates = results.filter(r => r !== null);
+
+    const largeCaps = candidates.filter(s => s.bucket === "LARGE_CAP");
+    const midCaps = candidates.filter(s => s.bucket === "MID_CAP");
+
+    // Sortera varje bucket på edge score (högst först)
+    largeCaps.sort((a, b) => b.edgeScore - a.edgeScore);
+    midCaps.sort((a, b) => b.edgeScore - a.edgeScore);
+
+    // Ta topp 20 från varje bucket
+    const finalLarge = largeCaps.slice(0, 20);
+    const finalMid = midCaps.slice(0, 20);
+
+    // Kombinera: 20 Large + 20 Mid = 40 totalt
+    const finalList = [...finalLarge, ...finalMid];
+
+    console.log(`Screener result: ${finalLarge.length} Large-cap + ${finalMid.length} Mid-cap = ${finalList.length} total`);
 
     // Cache results
-    screenerCache = filtered;
+    screenerCache = finalList;
     screenerCacheDate = today;
 
-    res.json({ stocks: filtered });
+    res.json({ stocks: finalList });
   } catch (e) {
     console.error("Screener error:", e);
     res.status(500).json({ error: "Failed to run screener" });
@@ -1983,6 +2167,224 @@ app.post("/api/portfolio/update-field/:ticker", async (req, res) => {
   } catch (e) {
     console.error("Update field error:", e);
     res.status(500).json({ error: "Failed to update field" });
+  }
+});
+
+// ===== TRADING AGENTS ENDPOINTS =====
+
+// GET /api/agents
+// Get all trading agents
+app.get("/api/agents", async (req, res) => {
+  try {
+    const enabledOnly = req.query.enabled === 'true';
+    const agents = await agentsRepo.findAllAgents(enabledOnly);
+
+    // Add active signal counts
+    const agentsWithCounts = await Promise.all(
+      agents.map(async (agent) => {
+        const signals = await agentsRepo.findSignalsByAgent(agent.id, true);
+        return {
+          ...agent,
+          activeSignals: signals.length
+        };
+      })
+    );
+
+    res.json({ agents: agentsWithCounts });
+  } catch (error) {
+    console.error("Error fetching agents:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/agents/:id
+// Get specific agent with details
+app.get("/api/agents/:id", async (req, res) => {
+  try {
+    const agentId = parseInt(req.params.id);
+    const agent = await agentsRepo.findAgentById(agentId);
+
+    if (!agent) {
+      return res.status(404).json({ error: "Agent not found" });
+    }
+
+    // Get active signals for this agent
+    const signals = await agentsRepo.findSignalsByAgent(agentId, true);
+
+    res.json({
+      agent,
+      signals
+    });
+  } catch (error) {
+    console.error("Error fetching agent:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/agents/signals/active
+// Get all active signals across all agents
+app.get("/api/agents/signals/active", async (req, res) => {
+  try {
+    const signals = await agentsRepo.findAllActiveSignals();
+    res.json({ signals });
+  } catch (error) {
+    console.error("Error fetching active signals:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/agents/scan
+// Run all enabled agents against screener stocks
+app.post("/api/agents/scan", async (req, res) => {
+  try {
+    const today = dayjs().format('YYYY-MM-DD');
+
+    // Get all enabled agents
+    const agents = await agentsRepo.findAllAgents(true);
+
+    if (agents.length === 0) {
+      return res.json({ message: "No enabled agents found", newSignals: [] });
+    }
+
+    // Get screener stocks
+    const screenerStocks = await screenerRepo.findAllActive();
+
+    if (screenerStocks.length === 0) {
+      return res.json({ message: "No stocks in screener", newSignals: [] });
+    }
+
+    console.log(`Running ${agents.length} agents against ${screenerStocks.length} stocks...`);
+
+    const newSignals = [];
+
+    // Process each agent
+    for (const agent of agents) {
+      console.log(`\nAgent: ${agent.name} (${agent.type})`);
+
+      // Process each stock
+      for (const stock of screenerStocks) {
+        const { ticker } = stock;
+
+        // Check if signal already exists for today
+        const exists = await agentsRepo.signalExists(agent.id, ticker, today);
+        if (exists) {
+          continue; // Skip if already scanned today
+        }
+
+        try {
+          // Fetch candles
+          const queryOptions = {
+            period1: dayjs().subtract(1, 'year').format('YYYY-MM-DD'),
+            period2: dayjs().format('YYYY-MM-DD')
+          };
+          const result = await yahooFinance.historical(ticker, queryOptions);
+          const candles = result.map(q => ({
+            date: q.date,
+            open: q.open,
+            high: q.high,
+            low: q.low,
+            close: q.close,
+            volume: q.volume
+          })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+          if (candles.length < 210) {
+            continue; // Not enough data
+          }
+
+          // Run detection based on agent type
+          let signal = null;
+
+          if (agent.type === 'PULLBACK') {
+            signal = detectTrendPullback(candles);
+          }
+          // Add other agent types here in the future
+          // else if (agent.type === 'BREAKOUT') { signal = detectBreakout(candles); }
+          // etc.
+
+          // If signal detected, calculate edge score and save
+          if (signal) {
+            // Calculate edge score for this stock
+            const features = computeFeatures(candles);
+            const edgeScore = computeRanking(features, candles, stock.bucket);
+
+            // Add edge score to signal data
+            const signalWithEdge = {
+              ...signal,
+              edgeScore
+            };
+
+            const savedSignal = await agentsRepo.createSignal({
+              agent_id: agent.id,
+              ticker,
+              signal_date: today,
+              setup_data: signalWithEdge,
+              is_active: true
+            });
+
+            newSignals.push({
+              agentName: agent.name,
+              agentType: agent.type,
+              ticker,
+              ...signalWithEdge
+            });
+
+            console.log(`  ✓ ${ticker}: ${signal.type} (strength: ${signal.strength}, edge: ${edgeScore})`);
+          }
+        } catch (err) {
+          // Skip stocks with errors (delisted, etc.)
+          if (!err.message.includes('No data found')) {
+            console.error(`  Error scanning ${ticker}:`, err.message);
+          }
+        }
+      }
+    }
+
+    console.log(`\n✅ Scan complete! Found ${newSignals.length} new signals`);
+
+    res.json({
+      message: `Scanned ${screenerStocks.length} stocks with ${agents.length} agents`,
+      newSignals,
+      count: newSignals.length
+    });
+  } catch (error) {
+    console.error("Error in agents scan:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/agents/:id/toggle
+// Enable/disable an agent
+app.post("/api/agents/:id/toggle", async (req, res) => {
+  try {
+    const agentId = parseInt(req.params.id);
+    const { enabled } = req.body;
+
+    const agent = await agentsRepo.setAgentEnabled(agentId, enabled);
+
+    res.json({
+      message: `Agent ${enabled ? 'enabled' : 'disabled'}`,
+      agent
+    });
+  } catch (error) {
+    console.error("Error toggling agent:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/agents/signals/:id/deactivate
+// Deactivate a signal
+app.post("/api/agents/signals/:id/deactivate", async (req, res) => {
+  try {
+    const signalId = parseInt(req.params.id);
+    const signal = await agentsRepo.deactivateSignal(signalId);
+
+    res.json({
+      message: "Signal deactivated",
+      signal
+    });
+  } catch (error) {
+    console.error("Error deactivating signal:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
