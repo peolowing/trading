@@ -8,7 +8,7 @@ import { supabase } from '../config/supabase.js';
 import yahooFinance from 'yahoo-finance2';
 import dayjs from 'dayjs';
 import { EMA, RSI } from 'technicalindicators';
-import { updateWatchlistStatus, buildWatchlistInput } from './watchlistLogic.js';
+import { updateWatchlistStatus, buildWatchlistInput } from './utils/watchlistLogic.js';
 
 export default async function handler(req, res) {
   const { method } = req;
