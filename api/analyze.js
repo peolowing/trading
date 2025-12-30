@@ -79,20 +79,33 @@ function detectStrategy(indicators) {
   const priceAboveEMA50 = close > ema50;
   const ema20AboveEMA50 = ema20 > ema50;
 
+  // Calculate distance to EMA20 as percentage
+  const distToEMA20Pct = Math.abs((close - ema20) / ema20) * 100;
+
+  // Pullback Strategy
   if (regime === "Bullish Trend" && priceAboveEMA50 && !priceAboveEMA20 && rsi14 < 50) {
     return "Pullback";
   }
 
+  // Breakout Strategy
   if (regime === "Consolidation" && relativeVolume > 1.5 && close > ema20) {
     return "Breakout";
   }
 
+  // Reversal Strategy
   if (regime === "Bearish Trend" && rsi14 < 30 && relativeVolume > 1.3) {
     return "Reversal";
   }
 
+  // Trend Following
   if (regime === "Bullish Trend" && priceAboveEMA20 && ema20AboveEMA50 && rsi14 > 50 && rsi14 < 70) {
     return "Trend Following";
+  }
+
+  // Near Breakout - Added to catch stocks very close to breakout
+  // Criteria: Within 0.5% of EMA20, bullish structure (EMA20 > EMA50), neutral RSI
+  if (regime === "Consolidation" && ema20AboveEMA50 && distToEMA20Pct <= 0.5 && rsi14 >= 40 && rsi14 <= 60) {
+    return "Near Breakout";
   }
 
   return "Hold";
