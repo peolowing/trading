@@ -321,6 +321,43 @@ export default async function handler(req, res) {
             }
           }
 
+          // Calculate trade recommendations even from cache
+          const lastATR = dbCached.atr14_series[dbCached.atr14_series.length - 1];
+          const lastClose = dbCached.candles[dbCached.candles.length - 1].close;
+          let trade = null;
+
+          if (lastATR) {
+            const entry = lastClose;
+            const atrMultiplier = 1.5;
+            const rrRatio = 2.0;
+
+            if (regime === "Bearish Trend") {
+              const stop = entry + (lastATR * atrMultiplier);
+              const target = entry - ((stop - entry) * rrRatio);
+
+              trade = {
+                direction: "SHORT",
+                entry: parseFloat(entry.toFixed(2)),
+                stop: parseFloat(stop.toFixed(2)),
+                target: parseFloat(target.toFixed(2)),
+                rr: rrRatio,
+                atr: parseFloat(lastATR.toFixed(2))
+              };
+            } else {
+              const stop = entry - (lastATR * atrMultiplier);
+              const target = entry + ((entry - stop) * rrRatio);
+
+              trade = {
+                direction: "LONG",
+                entry: parseFloat(entry.toFixed(2)),
+                stop: parseFloat(stop.toFixed(2)),
+                target: parseFloat(target.toFixed(2)),
+                rr: rrRatio,
+                atr: parseFloat(lastATR.toFixed(2))
+              };
+            }
+          }
+
           return res.json({
             candles: dbCached.candles,
             ema20: dbCached.ema20_series,
@@ -329,6 +366,7 @@ export default async function handler(req, res) {
             atr14: dbCached.atr14_series,
             indicators,
             scoring,
+            trade,
             backtest: backtestResult
           });
         }
@@ -487,6 +525,46 @@ export default async function handler(req, res) {
       }
     }
 
+    // Calculate trade recommendations (entry, stop, target)
+    // Always provide trade object for manual entry, even if setup is "Hold"
+    const lastATR = atr14[atr14.length - 1];
+    let trade = null;
+
+    if (lastATR) {
+      const entry = lastClose;
+      const atrMultiplier = 1.5; // Stop distance
+      const rrRatio = 2.0; // Risk/Reward ratio
+
+      // For short setups (bearish)
+      if (regime === "Bearish Trend") {
+        const stop = entry + (lastATR * atrMultiplier);
+        const target = entry - ((stop - entry) * rrRatio);
+
+        trade = {
+          direction: "SHORT",
+          entry: parseFloat(entry.toFixed(2)),
+          stop: parseFloat(stop.toFixed(2)),
+          target: parseFloat(target.toFixed(2)),
+          rr: rrRatio,
+          atr: parseFloat(lastATR.toFixed(2))
+        };
+      }
+      // Default to long setups for all other cases (including "Hold")
+      else {
+        const stop = entry - (lastATR * atrMultiplier);
+        const target = entry + ((entry - stop) * rrRatio);
+
+        trade = {
+          direction: "LONG",
+          entry: parseFloat(entry.toFixed(2)),
+          stop: parseFloat(stop.toFixed(2)),
+          target: parseFloat(target.toFixed(2)),
+          rr: rrRatio,
+          atr: parseFloat(lastATR.toFixed(2))
+        };
+      }
+    }
+
     // Only send last 6 months of candles to reduce response size
     const sixMonthsAgo = dayjs().subtract(6, 'month').format('YYYY-MM-DD');
     const recentCandles = candles.filter(c => c.date >= sixMonthsAgo);
@@ -503,6 +581,7 @@ export default async function handler(req, res) {
       atr14: atr14.slice(startIndex),
       indicators,
       scoring,
+      trade,
       backtest: backtestResult
     };
 
