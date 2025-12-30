@@ -7,9 +7,8 @@ import { aiAnalysisRepo } from '../../repositories/index.js';
 
 export default async function handler(req, res) {
   try {
-    // Extract ticker from URL path
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const ticker = url.pathname.split('/').pop();
+    // Extract ticker from Vercel's dynamic route parameter
+    const ticker = req.query.ticker;
 
     const analyses = await aiAnalysisRepo.getRecentAnalyses(ticker, 3);
 
