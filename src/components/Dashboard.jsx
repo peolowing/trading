@@ -593,6 +593,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                 <tr style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Status</th>
                   <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Info</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Förändring</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Volym</th>
@@ -704,6 +705,33 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         {/* Aktie */}
                         <td style={{ padding: "10px 12px" }} onClick={() => onSelectStock(item.ticker)}>
                           <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
+                        </td>
+
+                        {/* Yahoo Finance Link */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <a
+                            href={`https://finance.yahoo.com/quote/${item.ticker}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: "#3b82f6",
+                              textDecoration: "none",
+                              fontSize: "16px",
+                              display: "inline-block",
+                              transition: "all 0.2s"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "#2563eb";
+                              e.currentTarget.style.transform = "scale(1.1)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "#3b82f6";
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            🔗
+                          </a>
                         </td>
 
                         {/* Pris (Live) */}
