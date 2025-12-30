@@ -254,7 +254,13 @@ function detectStrategy(indicators) {
   // Near Breakout - Added to catch stocks very close to breakout
   // Criteria: Within 0.5% of EMA20, bullish structure (EMA20 > EMA50), neutral RSI
   if (regime === "Consolidation" && ema20AboveEMA50 && distToEMA20Pct <= 0.5 && rsi14 >= 40 && rsi14 <= 60) {
+    console.log(`[Near Breakout Triggered] Regime: ${regime}, EMA20>${EMA50}: ${ema20AboveEMA50}, Dist: ${distToEMA20Pct.toFixed(3)}%, RSI: ${rsi14}`);
     return "Near Breakout";
+  }
+
+  // Debug: Log why Near Breakout didn't trigger
+  if (regime === "Consolidation" && distToEMA20Pct <= 0.5) {
+    console.log(`[Near Breakout Check Failed] ema20AboveEMA50: ${ema20AboveEMA50} (${ema20} > ${ema50}), RSI: ${rsi14} (need 40-60)`);
   }
 
   return "Hold";
