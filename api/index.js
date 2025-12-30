@@ -7,6 +7,7 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
 import { updateWatchlistStatus, buildWatchlistInput } from "./watchlistLogic.js";
+import { aiAnalysisRepo } from "../repositories/index.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -105,43 +106,19 @@ async function saveIndicators(ticker, date, indicators) {
 // Helper: Spara AI-analys
 async function saveAIAnalysis(ticker, date, analysis) {
   if (!supabase) return;
-  try {
-    const { error } = await supabase
-      .from('ai_analysis')
-      .upsert({
-        ticker,
-        analysis_date: date,
-        analysis_text: analysis
-      }, { onConflict: 'ticker,analysis_date' });
-
-    if (error) console.error("Supabase ai_analysis error:", error);
-  } catch (e) {
-    console.error("saveAIAnalysis error:", e);
-  }
+  return await aiAnalysisRepo.saveAnalysis(ticker, {
+    analysis_text: analysis,
+    edge_score: null,
+    edge_label: null,
+    win_rate: null,
+    total_return: null,
+    trades_count: null
+  });
 }
 
-// Helper: Hämta AI-analys
-async function getAIAnalysis(ticker, date) {
-  if (!supabase) return null;
-  try {
-    const { data, error } = await supabase
-      .from('ai_analysis')
-      .select('*')
-      .eq('ticker', ticker)
-      .eq('analysis_date', date)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      console.error("Supabase getAIAnalysis error:", error);
-      return null;
-    }
-
-    return data;
-  } catch (e) {
-    console.error("getAIAnalysis error:", e);
-    return null;
-  }
+// Helper: Hämta senaste AI-analys (oavsett datum)
+async function getAIAnalysis(ticker) {
+  return await aiAnalysisRepo.getLatestAnalysis(ticker);
 }
 
 // Helper: Spara backtest-resultat
@@ -712,18 +689,20 @@ app.post("/api/analyze", async (req, res) => {
 
 app.post("/api/ai-analysis", async (req, res) => {
   try {
-    const { ticker, candles, indicators } = req.body;
+    const { ticker, candles, indicators, force } = req.body;
 
     if (!ticker || !candles || !indicators) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const today = dayjs().format('YYYY-MM-DD');
-    let cached = await getAIAnalysis(ticker, today);
+    const forceRefresh = force === true;
 
-    if (cached) {
-      console.log(`Using cached AI analysis for ${ticker}`);
-      return res.json({ analysis: cached.analysis_text });
+    if (!forceRefresh) {
+      let cached = await getAIAnalysis(ticker);
+      if (cached) {
+        console.log(`Using cached AI analysis for ${ticker}`);
+        return res.json({ analysis: cached.analysis_text });
+      }
     }
 
     console.log(`Fetching fresh AI analysis for ${ticker}`);
@@ -836,11 +815,33 @@ Ge konkret trading-rekommendation baserat på nuläget.`
     });
 
     const analysis = completion.choices[0].message.content;
-    await saveAIAnalysis(ticker, today, analysis);
+    await saveAIAnalysis(ticker, dayjs().format('YYYY-MM-DD'), analysis);
 
     res.json({ analysis });
   } catch (error) {
     console.error("Error in /api/ai-analysis:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get AI analysis history for a ticker
+app.get("/api/ai-analysis/history/:ticker", async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const analyses = await aiAnalysisRepo.getRecentAnalyses(ticker, 3);
+
+    let comparison = null;
+    if (analyses.length >= 2) {
+      comparison = aiAnalysisRepo.compareAnalyses(analyses[0], analyses[1]);
+    }
+
+    res.json({
+      analyses,
+      comparison,
+      count: analyses.length
+    });
+  } catch (error) {
+    console.error("Error in /api/ai-analysis/history:", error);
     res.status(500).json({ error: error.message });
   }
 });
