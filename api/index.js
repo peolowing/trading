@@ -672,6 +672,8 @@ app.post("/api/analyze", async (req, res) => {
     const lastATR = atr14[atr14.length - 1];
     let trade = null;
 
+    console.log('Trade calculation debug:', { lastATR, lastClose, regime });
+
     if (lastATR) {
       const entry = lastClose;
       const atrMultiplier = 1.5; // Stop distance
@@ -706,6 +708,8 @@ app.post("/api/analyze", async (req, res) => {
         };
       }
     }
+
+    console.log('Trade object before response:', trade);
 
     res.json({
       candles: candles.map(c => ({
