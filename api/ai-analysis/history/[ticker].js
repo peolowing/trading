@@ -3,7 +3,7 @@
  * GET /api/ai-analysis/history/:ticker
  */
 
-import { aiAnalysisRepo } from '../../repositories/index.js';
+import { aiAnalysisRepo } from '../../../repositories/index.js';
 
 export default async function handler(req, res) {
   try {
