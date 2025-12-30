@@ -6,10 +6,12 @@ function AgentsDashboard({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [currentEdgeScores, setCurrentEdgeScores] = useState({});
 
   useEffect(() => {
     fetchAgents();
     fetchActiveSignals();
+    fetchCurrentEdgeScores();
   }, []);
 
   async function fetchAgents() {
@@ -34,6 +36,24 @@ function AgentsDashboard({ onBack }) {
     }
   }
 
+  async function fetchCurrentEdgeScores() {
+    try {
+      const res = await fetch("http://localhost:3002/api/screener");
+      const data = await res.json();
+      const stocks = data.stocks || [];
+
+      // Create a map of ticker -> current edge score
+      const edgeMap = {};
+      stocks.forEach(stock => {
+        edgeMap[stock.ticker] = stock.edgeScore;
+      });
+
+      setCurrentEdgeScores(edgeMap);
+    } catch (err) {
+      console.error("Error fetching current edge scores:", err);
+    }
+  }
+
   async function runScan() {
     setScanning(true);
     setScanResult(null);
@@ -45,9 +65,10 @@ function AgentsDashboard({ onBack }) {
       const data = await res.json();
       setScanResult(data);
 
-      // Refresh agents and signals
+      // Refresh agents, signals, and current edge scores
       await fetchAgents();
       await fetchActiveSignals();
+      await fetchCurrentEdgeScores();
     } catch (err) {
       console.error("Error running scan:", err);
       setScanResult({ error: err.message });
@@ -243,9 +264,14 @@ function AgentsDashboard({ onBack }) {
 
       {/* Active Signals */}
       <div>
-        <h2 style={{ fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>
-          Aktiva Signaler ({activeSignals.length})
-        </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: "600", margin: 0 }}>
+            Aktiva Signaler ({activeSignals.length})
+          </h2>
+          <div style={{ fontSize: "12px", color: "#6b7280", textAlign: "right" }}>
+            Edge Score visar: <strong>Original</strong> (vid signal) → <strong>Aktuell</strong> (från screener)
+          </div>
+        </div>
 
         {activeSignals.length === 0 ? (
           <div
@@ -300,11 +326,23 @@ function AgentsDashboard({ onBack }) {
                           fontWeight: "700",
                           padding: "3px 8px",
                           borderRadius: "4px",
-                          background: getPriorityBadge(signal.setup_data.edgeScore).bg,
-                          color: getPriorityBadge(signal.setup_data.edgeScore).text,
+                          background: getPriorityBadge(
+                            currentEdgeScores[signal.ticker] !== undefined
+                              ? currentEdgeScores[signal.ticker]
+                              : signal.setup_data.edgeScore
+                          ).bg,
+                          color: getPriorityBadge(
+                            currentEdgeScores[signal.ticker] !== undefined
+                              ? currentEdgeScores[signal.ticker]
+                              : signal.setup_data.edgeScore
+                          ).text,
                         }}
                       >
-                        {getPriorityBadge(signal.setup_data.edgeScore).label}
+                        {getPriorityBadge(
+                          currentEdgeScores[signal.ticker] !== undefined
+                            ? currentEdgeScores[signal.ticker]
+                            : signal.setup_data.edgeScore
+                        ).label}
                       </span>
                     )}
                     <span style={{ fontSize: "13px", color: "#6b7280" }}>
@@ -325,9 +363,37 @@ function AgentsDashboard({ onBack }) {
                     </div>
                     <div>
                       <span style={{ color: "#6b7280" }}>Edge Score:</span>{" "}
-                      <strong style={{ color: getEdgeScoreColor(signal.setup_data?.edgeScore) }}>
-                        {signal.setup_data?.edgeScore || "N/A"}/100
-                      </strong>
+                      {(() => {
+                        const originalEdge = signal.setup_data?.edgeScore;
+                        const currentEdge = currentEdgeScores[signal.ticker];
+                        const hasChanged = currentEdge !== undefined && originalEdge !== currentEdge;
+                        const diff = hasChanged ? currentEdge - originalEdge : 0;
+
+                        return (
+                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <strong style={{ color: getEdgeScoreColor(originalEdge) }}>
+                              {originalEdge || "N/A"}/100
+                            </strong>
+                            {hasChanged && (
+                              <>
+                                <span style={{ color: "#94a3b8" }}>→</span>
+                                <strong style={{ color: getEdgeScoreColor(currentEdge) }}>
+                                  {currentEdge}/100
+                                </strong>
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    fontWeight: "700",
+                                    color: diff > 0 ? "#16a34a" : "#dc2626",
+                                  }}
+                                >
+                                  {diff > 0 ? "⬆" : "⬇"} {Math.abs(diff)}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div>
                       <span style={{ color: "#6b7280" }}>Entry:</span>{" "}

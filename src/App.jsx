@@ -15,6 +15,7 @@ import PositionDetail from "./components/PositionDetail";
 import ClosedPositions from "./components/ClosedPositions";
 import ClosedPositionDetail from "./components/ClosedPositionDetail";
 import AgentsDashboard from "./components/AgentsDashboard";
+import WatchlistLive from "./components/WatchlistLive";
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -132,6 +133,11 @@ export default function App() {
   // Render Agents Dashboard if that view is selected
   if (currentView === "agents") {
     return <AgentsDashboard onBack={() => setCurrentView("dashboard")} />;
+  }
+
+  // Render Watchlist Live if that view is selected
+  if (currentView === "watchlist-live") {
+    return <WatchlistLive onBack={() => setCurrentView("dashboard")} />;
   }
 
   // Analysis view - shown when a stock is selected

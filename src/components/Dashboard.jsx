@@ -3,6 +3,8 @@ import EntryModal from "./EntryModal";
 
 export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition }) {
   const [watchlist, setWatchlist] = useState([]);
+  const [liveData, setLiveData] = useState({});
+  const [refreshingLive, setRefreshingLive] = useState(false);
   const [portfolio, setPortfolio] = useState([]);
   const [screenerData, setScreenerData] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
@@ -43,9 +45,35 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     try {
       const res = await fetch("/api/watchlist");
       const data = await res.json();
-      setWatchlist(data.stocks || []);
+      const stocks = data.stocks || [];
+      setWatchlist(stocks);
+
+      // Fetch live data for all watchlist stocks
+      if (stocks.length > 0) {
+        await fetchLiveData(stocks);
+      }
     } catch (e) {
       console.error("Watchlist error:", e);
+    }
+  }
+
+  async function fetchLiveData(stocks) {
+    setRefreshingLive(true);
+    try {
+      const tickers = stocks.map(s => s.ticker).join(",");
+      const res = await fetch(`/api/watchlist/live?tickers=${tickers}`);
+      const data = await res.json();
+      setLiveData(data.quotes || {});
+    } catch (e) {
+      console.error("Live data error:", e);
+    } finally {
+      setRefreshingLive(false);
+    }
+  }
+
+  async function refreshLiveData() {
+    if (watchlist.length > 0) {
+      await fetchLiveData(watchlist);
     }
   }
 
@@ -236,24 +264,44 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
           <p className="eyebrow">Veckotrading AI</p>
           <h1>📈 Dashboard</h1>
         </div>
-        <button
-          onClick={() => onNavigate("agents")}
-          style={{
-            padding: "10px 20px",
-            background: "#3b82f6",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            fontSize: "14px",
-            fontWeight: "600",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px"
-          }}
-        >
-          🤖 Trading Agents
-        </button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => onNavigate("watchlist-live")}
+            style={{
+              padding: "10px 20px",
+              background: "#10b981",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            📊 Live Watchlist
+          </button>
+          <button
+            onClick={() => onNavigate("agents")}
+            style={{
+              padding: "10px 20px",
+              background: "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            🤖 Trading Agents
+          </button>
+        </div>
       </header>
 
 
@@ -483,9 +531,45 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
 
       {/* Watchlist - Bevakningslista */}
       <div className="card" style={{ marginBottom: "16px" }}>
-        <div className="card-header">
-          <p className="eyebrow">Bevakningslista – Radar</p>
-          <span className="tag">{watchlist.length} aktier</span>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <p className="eyebrow">Bevakningslista – Radar</p>
+            <span className="tag">{watchlist.length} aktier</span>
+          </div>
+          {watchlist.length > 0 && (
+            <button
+              onClick={refreshLiveData}
+              disabled={refreshingLive}
+              style={{
+                padding: "6px 12px",
+                background: "transparent",
+                color: refreshingLive ? "#9ca3af" : "#64748b",
+                border: `1px solid ${refreshingLive ? "#d1d5db" : "#e5e7eb"}`,
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "500",
+                cursor: refreshingLive ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                if (!refreshingLive) {
+                  e.currentTarget.style.borderColor = "#94a3b8";
+                  e.currentTarget.style.color = "#475569";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!refreshingLive) {
+                  e.currentTarget.style.borderColor = "#e5e7eb";
+                  e.currentTarget.style.color = "#64748b";
+                }
+              }}
+            >
+              {refreshingLive ? "Uppdaterar..." : "🔄 Uppdatera"}
+            </button>
+          )}
         </div>
 
         {watchlist.length > 0 && (
@@ -509,14 +593,14 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                 <tr style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Status</th>
                   <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
-                  <th style={{ padding: "8px 12px", textAlign: "left" }}>Läge</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Förändring</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Volym</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms.</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>EMA20 Δ%</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Dag High</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Dag Low</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>EMA20 Δ%</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Vol×</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Setup</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Trend</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
                 </tr>
@@ -583,8 +667,18 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     // Warning icon for long waiting
                     const showWarning = item.days_in_watchlist > 10 && status !== 'READY';
 
-                    // Current price (use initial if no current)
-                    const displayPrice = item.current_price || item.initial_price;
+                    // Live data from Yahoo Finance
+                    const quote = liveData[item.ticker] || {};
+                    const livePrice = quote.regularMarketPrice;
+                    const change = quote.regularMarketChange || 0;
+                    const changePercent = quote.regularMarketChangePercent || 0;
+                    const volume = quote.regularMarketVolume;
+                    const dayHigh = quote.regularMarketDayHigh;
+                    const dayLow = quote.regularMarketDayLow;
+                    const isPositive = change >= 0;
+
+                    // Fallback to database price if live data not available
+                    const displayPrice = livePrice || item.current_price || item.initial_price;
 
                     return (
                       <tr
@@ -612,14 +706,29 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
                         </td>
 
-                        {/* Status Label */}
-                        <td style={{ padding: "10px 12px", fontSize: "12px", color: "#64748b" }} onClick={() => onSelectStock(item.ticker)}>
-                          {statusLabel}
+                        {/* Pris (Live) */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                          <span style={{ fontWeight: "600" }}>
+                            {displayPrice ? displayPrice.toFixed(2) : "—"}
+                          </span>
+                          {quote.currency && <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "4px" }}>{quote.currency}</span>}
                         </td>
 
-                        {/* Pris */}
+                        {/* Förändring (Live) */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
-                          {displayPrice ? displayPrice.toFixed(2) : "—"}
+                          {livePrice ? (
+                            <span style={{
+                              color: isPositive ? "#16a34a" : "#dc2626",
+                              fontWeight: "600"
+                            }}>
+                              {isPositive ? "+" : ""}{change.toFixed(2)} ({isPositive ? "+" : ""}{changePercent.toFixed(2)}%)
+                            </span>
+                          ) : "—"}
+                        </td>
+
+                        {/* Volym (Live) */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "12px" }} onClick={() => onSelectStock(item.ticker)}>
+                          {volume ? volume.toLocaleString() : "—"}
                         </td>
 
                         {/* Omsättning */}
@@ -632,8 +741,18 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           </span>
                         </td>
 
+                        {/* Dag High (Live) */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                          {dayHigh ? dayHigh.toFixed(2) : "—"}
+                        </td>
+
+                        {/* Dag Low (Live) */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                          {dayLow ? dayLow.toFixed(2) : "—"}
+                        </td>
+
                         {/* EMA20 Δ% */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600", color: ema20Color, fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: "600", color: ema20Color, fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {emaDist !== null && emaDist !== undefined ? `${emaDist > 0 ? '+' : ''}${emaDist.toFixed(1)}%` : "—"}
                         </td>
 
@@ -649,39 +768,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           }}>
                             {rsiZone || "—"}
                           </span>
-                        </td>
-
-                        {/* Vol× */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
-                          <span style={{
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            color: volColor,
-                            background: volColor === "#16a34a" ? "#f0fdf4" : volColor === "#3b82f6" ? "#eff6ff" : "#f8fafc",
-                            padding: "2px 6px",
-                            borderRadius: "4px"
-                          }}>
-                            {volState || "—"}
-                          </span>
-                        </td>
-
-                        {/* Setup */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
-                          <span style={{
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            color: "#64748b",
-                            background: "#f1f5f9",
-                            padding: "2px 6px",
-                            borderRadius: "4px"
-                          }}>
-                            {setupLabel}
-                          </span>
-                        </td>
-
-                        {/* Trend Health */}
-                        <td style={{ padding: "10px 12px", textAlign: "center", fontSize: "16px", fontWeight: "700", color: trendHealthColor }} onClick={() => onSelectStock(item.ticker)}>
-                          {trendHealthIcon}
                         </td>
 
                         {/* Dagar + Warning */}
