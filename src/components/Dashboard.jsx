@@ -681,6 +681,11 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     // Fallback to database price if live data not available
                     const displayPrice = livePrice || item.current_price || item.initial_price;
 
+                    // Calculate turnover from live data (or fallback to database)
+                    const turnoverMSEK = (livePrice && volume)
+                      ? (livePrice * volume) / 1_000_000
+                      : item.turnoverMSEK;
+
                     return (
                       <tr
                         key={item.ticker}
@@ -762,10 +767,10 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         {/* Omsättning */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           <span style={{
-                            color: item.turnoverMSEK >= 100 ? "#16a34a" : item.turnoverMSEK >= 30 ? "#64748b" : "#94a3b8",
+                            color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#64748b" : "#94a3b8",
                             fontWeight: "500"
                           }}>
-                            {item.turnoverMSEK ? `${item.turnoverMSEK.toFixed(0)}M` : "—"}
+                            {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}M` : "—"}
                           </span>
                         </td>
 
