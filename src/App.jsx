@@ -16,6 +16,7 @@ import ClosedPositions from "./components/ClosedPositions";
 import ClosedPositionDetail from "./components/ClosedPositionDetail";
 import AgentsDashboard from "./components/AgentsDashboard";
 import WatchlistLive from "./components/WatchlistLive";
+import EntryModal from "./components/EntryModal";
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -27,14 +28,8 @@ export default function App() {
   const [aiHistory, setAiHistory] = useState(null);
   const [refreshingAi, setRefreshingAi] = useState(false);
   const [selectedAnalysisTab, setSelectedAnalysisTab] = useState(0); // 0 = latest, 1 = previous, etc.
-  const [showBuyDialog, setShowBuyDialog] = useState(false);
-  const [tradeForm, setTradeForm] = useState({
-    quantity: 100,
-    price: 0,
-    stop_loss: 0,
-    target: 0,
-    setup_notes: ""
-  });
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [entryModalStock, setEntryModalStock] = useState(null);
 
   useEffect(() => {
     if (selectedStock) {
@@ -186,52 +181,61 @@ export default function App() {
 
   function handleOpenBuyDialog() {
     const currentPrice = data?.candles?.[data.candles.length - 1]?.close || 0;
-    const tradeInfo = extractTradeInfo(data?.ai, currentPrice);
 
-    setTradeForm({
-      quantity: 100,
-      price: tradeInfo.entry,
-      stop_loss: tradeInfo.stopLoss,
-      target: tradeInfo.target,
-      setup_notes: tradeInfo.setupNotes
-    });
-    setShowBuyDialog(true);
+    // Prefer data.analysis.trade values (from /api/analyze), fallback to AI text extraction
+    let entry, stop, target;
+
+    if (data?.analysis?.trade) {
+      // Use calculated trade values from backend
+      entry = data.analysis.trade.entry;
+      stop = data.analysis.trade.stop;
+      target = data.analysis.trade.target;
+    } else {
+      // Fallback to AI text extraction
+      const tradeInfo = extractTradeInfo(data?.ai, currentPrice);
+      entry = tradeInfo.entry;
+      stop = tradeInfo.stopLoss;
+      target = tradeInfo.target;
+    }
+
+    // Create enriched stock object for EntryModal
+    const enrichedStock = {
+      ticker: selectedStock,
+      current_price: currentPrice,
+      recommended_entry: entry,
+      recommended_stop: stop,
+      recommended_target: target,
+      recommended_rr: data?.analysis?.trade?.rr || 2.0,
+      ema20: data?.analysis?.indicators?.ema20,
+      ema50: data?.analysis?.indicators?.ema50,
+      rsi14: data?.analysis?.indicators?.rsi14,
+      atr14: data?.analysis?.indicators?.atr14,
+      regime: data?.analysis?.indicators?.regime,
+      setup: data?.analysis?.indicators?.setup,
+      notes: data?.ai ? extractTradeInfo(data.ai, currentPrice).setupNotes : ""
+    };
+
+    setEntryModalStock(enrichedStock);
+    setShowEntryModal(true);
   }
 
-  async function handleCreateTrade() {
+  async function handleEntryConfirm(portfolioEntry) {
     try {
-      const trade = {
-        date: new Date().toISOString().split('T')[0],
-        ticker: selectedStock,
-        type: 'BUY',
-        quantity: tradeForm.quantity,
-        price: tradeForm.price,
-        strategy: 'AI Analysis',
-        stop_loss: tradeForm.stop_loss,
-        target: tradeForm.target,
-        setup_notes: tradeForm.setup_notes,
-        result_kr: null,
-        result_pct: null,
-        lessons_learned: null
-      };
-
-      const response = await fetch("/api/trades", {
+      const response = await fetch("/api/portfolio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(trade)
+        body: JSON.stringify(portfolioEntry)
       });
 
       if (response.ok) {
-        alert("Trade skapad!");
-        setShowBuyDialog(false);
-        // Optionally navigate to dashboard or position view
+        setShowEntryModal(false);
         setCurrentView("dashboard");
       } else {
-        alert("Kunde inte skapa trade");
+        alert("Kunde inte lägga till i portfolio");
       }
     } catch (e) {
-      console.error("Failed to create trade:", e);
-      alert("Fel vid skapande av trade");
+      console.error("Failed to add to portfolio:", e);
+      alert("Fel vid tillägg till portfolio");
     }
   }
 
@@ -852,180 +856,13 @@ export default function App() {
         )}
       </div>
 
-      {/* Buy Dialog */}
-      {showBuyDialog && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: "white",
-            borderRadius: "12px",
-            padding: "24px",
-            maxWidth: "500px",
-            width: "90%",
-            maxHeight: "90vh",
-            overflow: "auto"
-          }}>
-            <h2 style={{ marginTop: 0, marginBottom: "20px" }}>Skapa köp för {selectedStock}</h2>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
-                  Antal aktier
-                </label>
-                <input
-                  type="number"
-                  value={tradeForm.quantity}
-                  onChange={(e) => setTradeForm({ ...tradeForm, quantity: parseInt(e.target.value) || 0 })}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "14px"
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
-                  Entry-pris (SEK)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={tradeForm.price}
-                  onChange={(e) => setTradeForm({ ...tradeForm, price: parseFloat(e.target.value) || 0 })}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "14px"
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
-                  Stop Loss (SEK)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={tradeForm.stop_loss}
-                  onChange={(e) => setTradeForm({ ...tradeForm, stop_loss: parseFloat(e.target.value) || 0 })}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "14px"
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
-                  Target (SEK)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={tradeForm.target}
-                  onChange={(e) => setTradeForm({ ...tradeForm, target: parseFloat(e.target.value) || 0 })}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "14px"
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
-                  Setup-anteckningar
-                </label>
-                <textarea
-                  value={tradeForm.setup_notes}
-                  onChange={(e) => setTradeForm({ ...tradeForm, setup_notes: e.target.value })}
-                  rows={4}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    fontFamily: "inherit",
-                    resize: "vertical"
-                  }}
-                />
-              </div>
-
-              {/* Summary */}
-              <div style={{
-                background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: "6px",
-                padding: "12px",
-                fontSize: "13px"
-              }}>
-                <div style={{ fontWeight: "600", marginBottom: "8px" }}>Sammanfattning:</div>
-                <div>Totalt belopp: {(tradeForm.quantity * tradeForm.price).toFixed(2)} SEK</div>
-                <div>Risk per aktie: {(tradeForm.price - tradeForm.stop_loss).toFixed(2)} SEK</div>
-                <div>Total risk: {(tradeForm.quantity * (tradeForm.price - tradeForm.stop_loss)).toFixed(2)} SEK</div>
-                <div>Potentiell vinst: {(tradeForm.quantity * (tradeForm.target - tradeForm.price)).toFixed(2)} SEK</div>
-                <div>Risk/Reward: 1:{((tradeForm.target - tradeForm.price) / (tradeForm.price - tradeForm.stop_loss)).toFixed(2)}</div>
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-                <button
-                  onClick={handleCreateTrade}
-                  style={{
-                    flex: 1,
-                    padding: "10px 16px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    background: "#22c55e",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Bekräfta köp
-                </button>
-                <button
-                  onClick={() => setShowBuyDialog(false)}
-                  style={{
-                    flex: 1,
-                    padding: "10px 16px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    background: "#6b7280",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Avbryt
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Entry Modal */}
+      {showEntryModal && entryModalStock && (
+        <EntryModal
+          stock={entryModalStock}
+          onClose={() => setShowEntryModal(false)}
+          onConfirm={handleEntryConfirm}
+        />
       )}
     </div>
   );
