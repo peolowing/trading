@@ -600,8 +600,9 @@ app.post("/api/analyze", async (req, res) => {
     }
 
     let setup = "Hold";
+    let debugInfo = null;
     try {
-      setup = detectStrategy({
+      const strategyInput = {
         ema20: lastEma20,
         ema50: lastEma50,
         rsi14: rsi14[rsi14.length - 1],
@@ -610,7 +611,22 @@ app.post("/api/analyze", async (req, res) => {
         close: lastClose,
         high: highs[highs.length - 1],
         low: lows[lows.length - 1]
-      });
+      };
+
+      // Debug info
+      const distToEMA20 = Math.abs((lastClose - lastEma20) / lastEma20) * 100;
+      debugInfo = {
+        close: lastClose,
+        ema20: lastEma20,
+        ema50: lastEma50,
+        rsi: rsi14[rsi14.length - 1],
+        regime,
+        distToEMA20Pct: distToEMA20,
+        ema20AboveEMA50: lastEma20 > lastEma50,
+        shouldTriggerNearBreakout: regime === "Consolidation" && lastEma20 > lastEma50 && distToEMA20 <= 0.5 && rsi14[rsi14.length - 1] >= 40 && rsi14[rsi14.length - 1] <= 60
+      };
+
+      setup = detectStrategy(strategyInput);
     } catch (e) {
       console.error("detectStrategy error:", e);
     }
@@ -685,7 +701,8 @@ app.post("/api/analyze", async (req, res) => {
       atr14,
       indicators,
       scoring,
-      backtest: backtestResult
+      backtest: backtestResult,
+      debug: debugInfo  // Temporary debug info
     });
   } catch (error) {
     console.error("Error in /api/analyze:", error);
