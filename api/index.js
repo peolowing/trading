@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import yahooFinance from "yahoo-finance2";
-import { EMA, RSI, ATR } from "technicalindicators";
+import { EMA, RSI, ATR, SMA } from "technicalindicators";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
@@ -249,6 +249,78 @@ function detectStrategy(indicators) {
   }
 
   return "Hold";
+}
+
+// Compute features for ranking
+function computeFeatures(candles) {
+  const closes = candles.map(c => c.close);
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+  const volumes = candles.map(c => c.volume);
+
+  const ema20 = EMA.calculate({ period: 20, values: closes }).at(-1);
+  const ema50 = EMA.calculate({ period: 50, values: closes }).at(-1);
+  const sma50 = SMA.calculate({ period: 50, values: closes }).at(-1);
+  const sma200 = SMA.calculate({ period: 200, values: closes }).at(-1);
+  const rsi14 = RSI.calculate({ period: 14, values: closes }).at(-1);
+  const atr14 = ATR.calculate({ period: 14, high: highs, low: lows, close: closes }).at(-1);
+
+  const close = closes.at(-1);
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const relVol = volumes.at(-1) / avgVol20;
+
+  const regime = ema20 > ema50 ? "UPTREND" : "DOWNTREND";
+
+  // EMA20 slope (change over last 10 days)
+  const ema20Series = EMA.calculate({ period: 20, values: closes });
+  const slope = ema20Series.length >= 10
+    ? (ema20Series.at(-1) - ema20Series.at(-10)) / ema20Series.at(-10)
+    : 0;
+
+  return { ema20, ema50, sma50, sma200, rsi14, atr14, close, relVol, regime, slope };
+}
+
+// Ranking: 0-100 score
+function computeRanking(features, candles, bucket = "UNKNOWN") {
+  let score = 0;
+
+  // 1. Liquidity (30 pts)
+  const last = candles.at(-1);
+  const turnoverM = (last.close * last.volume) / 1_000_000;
+  if (turnoverM > 200) score += 30;      // Large-cap
+  else if (turnoverM > 100) score += 25; // Large-cap
+  else if (turnoverM > 50) score += 20;  // Large/Mid-cap
+  else if (turnoverM > 30) score += 15;  // Mid-cap
+  else if (turnoverM > 15) score += 10;  // Mid-cap
+
+  // 2. Trend (30 pts)
+  if (features.regime === "UPTREND") {
+    score += 18;
+    if (features.slope > 0.05) score += 12;
+    else if (features.slope > 0) score += 6;
+  } else {
+    if (features.slope < -0.05) score -= 5;
+  }
+
+  // 3. Volatility (20 pts)
+  const atrPct = features.atr14 / features.close;
+  if (atrPct >= 0.02 && atrPct <= 0.05) score += 20; // sweet spot
+  else if (atrPct > 0.05) score += 10; // high volatility ok
+  else score += 5; // low volatility less interesting
+
+  // Penalty for Mid Cap with low ATR
+  if (bucket === "MID_CAP" && atrPct < 0.018) {
+    score -= 10;
+  }
+
+  // 4. Momentum (20 pts)
+  if (features.rsi14 >= 40 && features.rsi14 <= 60) score += 15; // neutral/bullish
+  else if (features.rsi14 > 60 && features.rsi14 <= 70) score += 10; // strong but not overbought
+  else if (features.rsi14 < 30) score += 5; // oversold = potential
+
+  if (features.relVol > 1.3) score += 5; // above-average volume
+
+  return Math.max(0, Math.min(100, score));
 }
 
 function runBacktest(candles, strategy) {
@@ -531,21 +603,13 @@ app.post("/api/analyze", async (req, res) => {
       setup
     };
 
-    // Calculate edge score (0-10 scale)
-    let edgeScore = 5;
-    if (regime === "Bullish Trend") edgeScore += 2;
-    else if (regime === "Bearish Trend") edgeScore -= 2;
-    if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
-    if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
-    if (relativeVolume > 1.5) edgeScore += 1;
-    if (relativeVolume < 0.8) edgeScore -= 0.5;
-    if (setup !== "Hold") edgeScore += 0.5;
-
-    const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+    // Calculate edge score (0-100 scale) using computeRanking
+    const features = computeFeatures(candles);
+    const finalEdgeScore = computeRanking(features, candles, "UNKNOWN");
 
     const scoring = {
       score: finalEdgeScore,
-      label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+      label: finalEdgeScore >= 70 ? "Strong Edge" : finalEdgeScore >= 50 ? "OK" : "Weak Edge"
     };
 
     // Run backtest with detected strategy
@@ -821,17 +885,10 @@ app.get("/api/screener", async (req, res) => {
             low: lows[lows.length - 1]
           });
 
-          // Calculate edge score (0-10 scale)
-          let edgeScore = 5;
-          if (regime === "Bullish Trend") edgeScore += 2;
-          else if (regime === "Bearish Trend") edgeScore -= 2;
-          if (lastRsi >= 40 && lastRsi <= 60) edgeScore += 1;
-          if (lastRsi < 30 || lastRsi > 70) edgeScore -= 1;
-          if (relativeVolume > 1.5) edgeScore += 1;
-          if (relativeVolume < 0.8) edgeScore -= 0.5;
-          if (setup !== "Hold") edgeScore += 0.5;
-
-          const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+          // Calculate edge score (0-100 scale) using computeRanking
+          const features = computeFeatures(candles);
+          const bucket = dbStocks.find(s => s.ticker === ticker)?.bucket || "UNKNOWN";
+          const finalEdgeScore = computeRanking(features, candles, bucket);
 
           // Skip AI analysis in screener for performance
           // AI analysis will be loaded when user selects a specific stock
