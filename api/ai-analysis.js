@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
-import { aiAnalysisRepo } from '../repositories/index.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -16,35 +15,9 @@ const supabase = (supabaseUrl && supabaseKey)
 const aiCache = new Map();
 
 export default async function handler(req, res) {
-  const { method } = req;
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const pathname = url.pathname;
-
-  // GET /api/ai-analysis/history/:ticker - Get analysis history
-  if (method === 'GET' && pathname.includes('/history/')) {
-    try {
-      const ticker = pathname.split('/').pop();
-      const analyses = await aiAnalysisRepo.getRecentAnalyses(ticker, 3);
-
-      let comparison = null;
-      if (analyses.length >= 2) {
-        comparison = aiAnalysisRepo.compareAnalyses(analyses[0], analyses[1]);
-      }
-
-      return res.json({
-        analyses,
-        comparison,
-        count: analyses.length
-      });
-    } catch (error) {
-      console.error("Error in /api/ai-analysis/history:", error);
-      return res.status(500).json({ error: error.message });
-    }
-  }
-
   // POST /api/ai-analysis - Generate new AI analysis
-  if (method !== 'POST') {
-    return res.status(405).json({ error: `Method ${method} not allowed` });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: `Method ${req.method} not allowed` });
   }
 
   try {
