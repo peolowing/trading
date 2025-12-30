@@ -1,122 +1,111 @@
 # Vercel Serverless Endpoints
 
-This document lists all serverless functions deployed to Vercel and their purposes.
-
-## Current Endpoints (10/12 used)
+## Current Endpoints (7/12 used)
 
 ### 1. `/api/analyze` - Technical Analysis
 **File:** `api/analyze.js`  
 **Methods:** POST  
-**Purpose:** Fetch market data, calculate indicators, detect setup, compute edge score  
-**Returns:** Candles, indicators, trade object (entry/stop/target), backtest results
+**Purpose:** Complete technical analysis with indicators, setup detection, edge scoring  
+**Returns:** Candles, indicators, **trade object** (entry/stop/target), backtest
 
-### 2. `/api/ai-analysis` - AI Analysis Generation
+### 2. `/api/ai-analysis` - AI Analysis
 **File:** `api/ai-analysis.js`  
 **Methods:** POST  
-**Purpose:** Generate OpenAI analysis for a ticker  
-**Returns:** AI-generated trading analysis text
+**Purpose:** Generate OpenAI trading analysis  
+**Returns:** AI-generated analysis text
 
-### 3. `/api/ai-analysis/history/:ticker` - AI Analysis History
+### 3. `/api/ai-analysis/history/:ticker` - AI History
 **File:** `api/ai-analysis/history/[ticker].js`  
 **Methods:** GET  
-**Purpose:** Fetch last 3 AI analyses and comparison  
-**Returns:** Array of analyses with diff comparison
+**Purpose:** Fetch last 3 analyses with comparison  
+**Returns:** Analyses array + diff comparison
 
 ### 4. `/api/portfolio` - Portfolio Management
 **File:** `api/portfolio.js`  
 **Methods:** GET, POST, DELETE  
 **Purpose:** Manage open positions  
-**Returns:** List of portfolio stocks with entry prices
+**Routes:**
+- `GET /api/portfolio` - List all positions
+- `POST /api/portfolio` - Add new position
+- `DELETE /api/portfolio/:ticker` - Close position
 
 ### 5. `/api/trades` - Trade Journal
 **File:** `api/trades.js`  
 **Methods:** GET, POST, PUT, DELETE  
-**Purpose:** Full CRUD for trade journal entries  
-**Returns:** List of historical trades
+**Purpose:** Complete trade journal CRUD  
+**Routes:**
+- `GET /api/trades` - List all trades
+- `POST /api/trades` - Create trade
+- `PUT /api/trades/:id` - Update trade
+- `DELETE /api/trades/:id` - Delete trade
 
 ### 6. `/api/watchlist` - Watchlist Management
 **File:** `api/watchlist.js`  
 **Methods:** GET, POST, DELETE  
-**Purpose:** Manage stocks being watched for setups  
+**Purpose:** Track stocks for setups  
 **Routes:**
-- `GET /api/watchlist` - List all watchlist stocks
+- `GET /api/watchlist` - List watchlist
 - `POST /api/watchlist` - Add to watchlist
 - `DELETE /api/watchlist/:ticker` - Remove from watchlist
-- `GET /api/watchlist/live?tickers=X,Y` - Live quotes from Yahoo Finance
-- `POST /api/watchlist/update` - Daily batch status update
+- `GET /api/watchlist/live?tickers=X,Y` - Live Yahoo quotes
+- `POST /api/watchlist/update` - Daily batch update
 
-### 7. `/api/screener/stocks` - Screener Stock List
-**File:** `api/screener/stocks/index.js`  
-**Methods:** GET, POST  
-**Purpose:** Manage which stocks to include in screener  
-**Returns:** List of tickers with bucket classification
+### 7. `/api/screener` - Screener (Combined Endpoint)
+**File:** `api/screener.js`  
+**Methods:** GET, POST, DELETE, PATCH  
+**Purpose:** All screener functionality in one endpoint  
+**Routes:**
+- `GET /api/screener` - Main screener with scores (Dashboard view)
+- `GET /api/screener/stocks` - Stock list (Admin view)
+- `POST /api/screener/stocks` - Add stock to screener
+- `DELETE /api/screener/stocks/:ticker` - Remove stock
+- `PATCH /api/screener/stocks/:ticker` - Update stock (toggle active)
 
-### 8. `/api/screener/stocks/:ticker` - Individual Stock Management
-**File:** `api/screener/stocks/[ticker].js`  
-**Methods:** DELETE, PATCH  
-**Purpose:** Remove stock or toggle active status  
-**Returns:** Updated stock object
+**Note:** Uses rewrite rule in `vercel.json` to route `/api/screener/stocks/*` to `/api/screener`
 
-### 9. `/api/backtest` - Backtest Engine
-**File:** `api/backtest.js`  
-**Methods:** POST  
-**Purpose:** Simple backtest of strategy on candle data  
-**Returns:** Trade count and win rate
-
-### 10. `/api/market-data` - Market Data Fetcher
-**File:** `api/market-data.js`  
-**Methods:** GET  
-**Purpose:** Fetch historical data from Yahoo Finance  
-**Returns:** Array of OHLCV candles
-
-## Not Deployed (Local Only)
-
-### `api/utils/index.js` (formerly `api/index.js`)
-Monolithic Express server for local development (`npm run server`).  
-Contains all endpoint logic in one file but not used in Vercel.
-
-### `api/utils/watchlistLogic.js`
-Shared logic for watchlist status updates.  
-Imported by `watchlist.js` endpoint.
-
-## Architecture Notes
+## Architecture
 
 **Local Development:**
-- Uses `server.js` which imports `api/utils/index.js`
-- Single Express server with all routes
+- `server.js` → `api/utils/index.js` (Express monolith)
+- All routes in one file
 
 **Vercel Production:**
-- Each endpoint is a separate serverless function
-- Vercel automatically routes based on file structure:
-  - `/api/analyze` → `api/analyze.js`
-  - `/api/screener/stocks` → `api/screener/stocks/index.js`
-  - `/api/screener/stocks/:ticker` → `api/screener/stocks/[ticker].js`
+- Each endpoint = separate serverless function
+- Vercel auto-routes based on file structure
 - Dynamic routes use `[param].js` syntax
-- Max 12 functions on Hobby plan (currently using 10)
+- Rewrites handle nested paths to single file
 
-## Environment Variables Required
+## Why Only 7 Functions?
 
-Both local and Vercel need:
-```
-OPENAI_API_KEY=sk-...
-SUPABASE_URL=https://....supabase.co
-SUPABASE_KEY=eyJhbG...
-```
+Initially had 11+ endpoints but hit Vercel Hobby's 12-function limit. Optimized by:
 
-## Testing Endpoints
+1. **Combined screener routes** - All screener logic in one file using pathname routing
+2. **Moved utilities** - `backtest.js`, `market-data.js` to `api/utils/`
+3. **Used rewrites** - Route `/api/screener/stocks/*` to `/api/screener.js`
+
+## Testing
 
 ```bash
-# Test analyze with trade object
+# Analyze with trade object
 curl -X POST https://weekly-trading-ai.vercel.app/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"ticker":"AAPL"}' | jq '.trade'
+  -H "Content-Type: application/json" -d '{"ticker":"AAPL"}' | jq '.trade'
 
-# Test portfolio
-curl https://weekly-trading-ai.vercel.app/api/portfolio | jq '.stocks | length'
+# Screener (main)
+curl https://weekly-trading-ai.vercel.app/api/screener | jq '.stocks | length'
 
-# Test screener stocks list
+# Screener stocks (admin)
 curl https://weekly-trading-ai.vercel.app/api/screener/stocks | jq '.stocks | length'
 
-# Test AI history
+# Portfolio
+curl https://weekly-trading-ai.vercel.app/api/portfolio | jq '.stocks'
+
+# AI history
 curl https://weekly-trading-ai.vercel.app/api/ai-analysis/history/AAPL | jq '.count'
 ```
+
+## Important Files
+
+- `vercel.json` - Config with rewrites for nested routes
+- `api/utils/` - Shared logic, local-only endpoints
+- `config/supabase.js` - Database client
+- `repositories/` - Data access layer
