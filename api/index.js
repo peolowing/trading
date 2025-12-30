@@ -231,6 +231,13 @@ function detectStrategy(indicators) {
   // Calculate distance to EMA20 as percentage
   const distToEMA20Pct = Math.abs((close - ema20) / ema20) * 100;
 
+  // Debug: Log all values for Consolidation regime
+  if (regime === "Consolidation" && distToEMA20Pct <= 1.0) {
+    console.log(`[detectStrategy Debug] close: ${close}, ema20: ${ema20}, ema50: ${ema50}, rsi14: ${rsi14}`);
+    console.log(`[detectStrategy Debug] ema20AboveEMA50: ${ema20AboveEMA50}, distToEMA20Pct: ${distToEMA20Pct.toFixed(3)}%`);
+    console.log(`[detectStrategy Debug] All checks: regime=${regime}, ema20>ema50=${ema20AboveEMA50}, dist<0.5=${distToEMA20Pct <= 0.5}, rsi 40-60=${rsi14 >= 40 && rsi14 <= 60}`);
+  }
+
   // Pullback Strategy
   if (regime === "Bullish Trend" && priceAboveEMA50 && !priceAboveEMA20 && rsi14 < 50) {
     return "Pullback";
