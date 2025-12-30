@@ -1139,6 +1139,49 @@ app.delete("/api/watchlist/:ticker", async (req, res) => {
   }
 });
 
+// GET /api/watchlist/live - Hämta live quotes från Yahoo Finance
+app.get("/api/watchlist/live", async (req, res) => {
+  try {
+    const { tickers } = req.query;
+    if (!tickers) {
+      return res.status(400).json({ error: "Tickers parameter required" });
+    }
+
+    const tickerList = tickers.split(',').map(t => t.trim());
+    const quotes = {};
+
+    await Promise.all(
+      tickerList.map(async (ticker) => {
+        try {
+          const quote = await yahooFinance.quote(ticker);
+          quotes[ticker] = {
+            regularMarketPrice: quote.regularMarketPrice,
+            regularMarketChange: quote.regularMarketChange,
+            regularMarketChangePercent: quote.regularMarketChangePercent,
+            regularMarketVolume: quote.regularMarketVolume,
+            regularMarketDayHigh: quote.regularMarketDayHigh,
+            regularMarketDayLow: quote.regularMarketDayLow,
+            regularMarketOpen: quote.regularMarketOpen,
+            regularMarketPreviousClose: quote.regularMarketPreviousClose,
+            marketState: quote.marketState,
+            currency: quote.currency,
+            longName: quote.longName,
+            shortName: quote.shortName,
+          };
+        } catch (e) {
+          console.warn(`Failed to fetch quote for ${ticker}:`, e.message);
+          quotes[ticker] = { error: "Failed to fetch" };
+        }
+      })
+    );
+
+    res.json({ quotes });
+  } catch (e) {
+    console.error("Get live watchlist error:", e);
+    res.status(500).json({ error: "Failed to fetch live data" });
+  }
+});
+
 // POST /api/watchlist/update - Uppdatera alla watchlist-statusar (daglig batch)
 app.post("/api/watchlist/update", async (req, res) => {
   if (!supabase) {
