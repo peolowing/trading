@@ -6,7 +6,7 @@
 import { supabase } from '../config/supabase.js';
 
 /**
- * Save a new AI analysis (keeps up to 3 most recent per ticker+date)
+ * Save a new AI analysis (keeps up to 3 most recent per ticker, regardless of date)
  */
 export async function saveAnalysis(ticker, analysisData) {
   if (!supabase) {
@@ -38,8 +38,8 @@ export async function saveAnalysis(ticker, analysisData) {
       return null;
     }
 
-    // Clean up old analyses (keep only 3 most recent per ticker+date)
-    await cleanupOldAnalyses(ticker, today);
+    // Clean up old analyses (keep only 3 most recent per ticker, regardless of date)
+    await cleanupOldAnalyses(ticker);
 
     return data;
   } catch (e) {
@@ -49,9 +49,9 @@ export async function saveAnalysis(ticker, analysisData) {
 }
 
 /**
- * Get the N most recent analyses for a ticker on a specific date
+ * Get the N most recent analyses for a ticker (regardless of date)
  */
-export async function getRecentAnalyses(ticker, date, limit = 3) {
+export async function getRecentAnalyses(ticker, limit = 3) {
   if (!supabase) return [];
 
   try {
@@ -59,7 +59,6 @@ export async function getRecentAnalyses(ticker, date, limit = 3) {
       .from('ai_analysis')
       .select('*')
       .eq('ticker', ticker)
-      .eq('analysis_date', date)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -76,26 +75,25 @@ export async function getRecentAnalyses(ticker, date, limit = 3) {
 }
 
 /**
- * Get the most recent analysis for a ticker on a specific date
+ * Get the most recent analysis for a ticker
  */
-export async function getLatestAnalysis(ticker, date) {
-  const analyses = await getRecentAnalyses(ticker, date, 1);
+export async function getLatestAnalysis(ticker) {
+  const analyses = await getRecentAnalyses(ticker, 1);
   return analyses[0] || null;
 }
 
 /**
- * Clean up old analyses, keeping only the 3 most recent
+ * Clean up old analyses, keeping only the 3 most recent (regardless of date)
  */
-async function cleanupOldAnalyses(ticker, date) {
+async function cleanupOldAnalyses(ticker) {
   if (!supabase) return;
 
   try {
-    // Get all analyses for this ticker+date
+    // Get all analyses for this ticker
     const { data: allAnalyses, error: fetchError } = await supabase
       .from('ai_analysis')
       .select('id, created_at')
       .eq('ticker', ticker)
-      .eq('analysis_date', date)
       .order('created_at', { ascending: false });
 
     if (fetchError) {
@@ -124,13 +122,17 @@ async function cleanupOldAnalyses(ticker, date) {
 }
 
 /**
- * Compare two analyses and return differences
+ * Compare two analyses and return detailed differences
  */
 export function compareAnalyses(latest, previous) {
   if (!latest || !previous) return null;
 
   const diff = {
     hasChanges: false,
+    timestamp: {
+      latest: latest.created_at,
+      previous: previous.created_at
+    },
     edgeScore: null,
     recommendation: null,
     sections: []
@@ -163,10 +165,15 @@ export function compareAnalyses(latest, previous) {
 
     if (latestSection !== previousSection) {
       diff.hasChanges = true;
+
+      // Calculate detailed changes
+      const changes = findTextDifferences(previousSection, latestSection);
+
       diff.sections.push({
         name: sectionName,
         old: previousSection,
         new: latestSection,
+        changes: changes,
         hasChanged: true
       });
     }
@@ -188,6 +195,77 @@ export function compareAnalyses(latest, previous) {
   }
 
   return diff;
+}
+
+/**
+ * Find detailed text differences between old and new text
+ * Only returns changes that contain significant information (numbers, values, etc)
+ */
+function findTextDifferences(oldText, newText) {
+  if (!oldText && !newText) return [];
+  if (!oldText) return hasSignificantContent(newText) ? [{ type: 'added', text: newText }] : [];
+  if (!newText) return hasSignificantContent(oldText) ? [{ type: 'removed', text: oldText }] : [];
+
+  const changes = [];
+
+  // Split into sentences for better granularity
+  const oldSentences = oldText.split(/([.!?]\s+)/).filter(s => s.trim());
+  const newSentences = newText.split(/([.!?]\s+)/).filter(s => s.trim());
+
+  // Simple diff: find added/removed sentences
+  const oldSet = new Set(oldSentences);
+  const newSet = new Set(newSentences);
+
+  // Find removed sentences with significant content
+  oldSentences.forEach(sentence => {
+    if (!newSet.has(sentence) && sentence.trim().length > 5) {
+      if (hasSignificantContent(sentence)) {
+        changes.push({
+          type: 'removed',
+          text: sentence.trim()
+        });
+      }
+    }
+  });
+
+  // Find added sentences with significant content
+  newSentences.forEach(sentence => {
+    if (!oldSet.has(sentence) && sentence.trim().length > 5) {
+      if (hasSignificantContent(sentence)) {
+        changes.push({
+          type: 'added',
+          text: sentence.trim()
+        });
+      }
+    }
+  });
+
+  return changes;
+}
+
+/**
+ * Check if text contains significant content (numbers, values, important keywords)
+ */
+function hasSignificantContent(text) {
+  if (!text) return false;
+
+  // Check for numbers/values
+  const hasNumbers = /\d+/.test(text);
+
+  // Check for percentages
+  const hasPercent = /%/.test(text);
+
+  // Check for currency/prices
+  const hasCurrency = /(SEK|kr|kronor|\$|€)/i.test(text);
+
+  // Check for important keywords indicating concrete values
+  const hasKeywords = /(RSI|EMA|ATR|volym|pris|target|stop|entry|rekommendation|KÖP|INVÄNTA|UNDVIK)/i.test(text);
+
+  // Check for dates
+  const hasDates = /\d{4}-\d{2}-\d{2}/.test(text);
+
+  // Must contain at least one significant element
+  return hasNumbers || hasPercent || hasCurrency || hasKeywords || hasDates;
 }
 
 /**

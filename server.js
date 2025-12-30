@@ -185,10 +185,9 @@ async function saveAIAnalysis(ticker, analysisText, scoring, backtest) {
   });
 }
 
-// Helper: Hämta senaste AI-analys för idag
+// Helper: Hämta senaste AI-analys (oavsett datum)
 async function getAIAnalysis(ticker) {
-  const today = new Date().toISOString().split('T')[0];
-  return await aiAnalysisRepo.getLatestAnalysis(ticker, today);
+  return await aiAnalysisRepo.getLatestAnalysis(ticker);
 }
 
 // Helper: Spara backtest-resultat
@@ -748,10 +747,9 @@ Ge ditt svar i exakt följande format:
 app.get("/api/ai-analysis/history/:ticker", async (req, res) => {
   try {
     const { ticker } = req.params;
-    const today = new Date().toISOString().split('T')[0];
 
-    // Hämta de 3 senaste analyserna
-    const analyses = await aiAnalysisRepo.getRecentAnalyses(ticker, today, 3);
+    // Hämta de 3 senaste analyserna (oavsett datum)
+    const analyses = await aiAnalysisRepo.getRecentAnalyses(ticker, 3);
 
     // Jämför senaste med näst senaste om båda finns
     let comparison = null;

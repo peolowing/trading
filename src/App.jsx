@@ -26,6 +26,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "position-detail", "closed-positions", or "closed-position-detail"
   const [aiHistory, setAiHistory] = useState(null);
   const [refreshingAi, setRefreshingAi] = useState(false);
+  const [selectedAnalysisTab, setSelectedAnalysisTab] = useState(0); // 0 = latest, 1 = previous, etc.
 
   useEffect(() => {
     if (selectedStock) {
@@ -512,7 +513,7 @@ export default function App() {
                 padding: "2px 8px",
                 borderRadius: "4px"
               }}>
-                {aiHistory.count} analyser idag
+                {aiHistory.count} analyser sparade
               </span>
             )}
           </div>
@@ -547,8 +548,25 @@ export default function App() {
             marginBottom: "15px",
             fontSize: "13px"
           }}>
-            <div style={{ fontWeight: "700", color: "#ea580c", marginBottom: "8px" }}>
-              📊 Ändringar sedan förra analysen
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px"
+            }}>
+              <div style={{ fontWeight: "700", color: "#ea580c" }}>
+                📊 Ändringar sedan förra analysen
+              </div>
+              {aiHistory.comparison.timestamp?.latest && (
+                <div style={{ fontSize: "11px", color: "#6b7280" }}>
+                  Senast: {new Date(aiHistory.comparison.timestamp.latest).toLocaleString('sv-SE', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+              )}
             </div>
 
             {aiHistory.comparison.edgeScore && (
@@ -569,11 +587,99 @@ export default function App() {
               </div>
             )}
 
-            {aiHistory.comparison.sections?.length > 0 && (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "#6b7280" }}>
-                Ändrade sektioner: {aiHistory.comparison.sections.map(s => s.name).join(", ")}
+            {aiHistory.comparison.sections?.filter(s => s.changes && s.changes.length >= 3).length > 0 && (
+              <div style={{ marginTop: "12px" }}>
+                <div style={{ fontWeight: "600", marginBottom: "8px", color: "#0f172a" }}>
+                  Detaljerade ändringar:
+                </div>
+                {aiHistory.comparison.sections
+                  .filter(section => section.changes && section.changes.length >= 3)
+                  .map((section, idx) => (
+                    <details key={idx} style={{ marginBottom: "8px" }}>
+                      <summary style={{
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        color: "#ea580c",
+                        padding: "4px 0"
+                      }}>
+                        {section.name}
+                      </summary>
+                      <div style={{
+                        marginTop: "6px",
+                        paddingLeft: "12px",
+                        borderLeft: "2px solid #fed7aa"
+                      }}>
+                        {section.changes.map((change, changeIdx) => (
+                          <div
+                            key={changeIdx}
+                            style={{
+                              padding: "4px 8px",
+                              marginBottom: "4px",
+                              borderRadius: "4px",
+                              background: change.type === 'added' ? '#dcfce7' : '#fee2e2',
+                              borderLeft: `3px solid ${change.type === 'added' ? '#16a34a' : '#dc2626'}`,
+                              fontSize: "12px"
+                            }}
+                          >
+                            <strong style={{
+                              color: change.type === 'added' ? '#16a34a' : '#dc2626',
+                              fontSize: "10px",
+                              marginRight: "6px"
+                            }}>
+                              {change.type === 'added' ? '+ TILLAGT' : '- BORTTAGET'}
+                            </strong>
+                            {change.text}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Analysis History Tabs */}
+        {aiHistory?.analyses && aiHistory.analyses.length > 1 && (
+          <div style={{ marginBottom: "15px" }}>
+            <div style={{
+              display: "flex",
+              gap: "8px",
+              borderBottom: "2px solid #e5e7eb",
+              marginBottom: "12px"
+            }}>
+              {aiHistory.analyses.map((analysis, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setSelectedAnalysisTab(idx);
+                    setData(prev => ({ ...prev, ai: analysis.analysis_text }));
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    background: selectedAnalysisTab === idx ? "#3b82f6" : "transparent",
+                    color: selectedAnalysisTab === idx ? "white" : "#6b7280",
+                    border: "none",
+                    borderBottom: selectedAnalysisTab === idx ? "2px solid #3b82f6" : "2px solid transparent",
+                    cursor: "pointer",
+                    borderRadius: "4px 4px 0 0",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  {idx === 0 ? "Senaste" : `Analys ${idx + 1}`}
+                  <div style={{ fontSize: "10px", opacity: 0.8, marginTop: "2px" }}>
+                    {new Date(analysis.created_at).toLocaleString('sv-SE', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
