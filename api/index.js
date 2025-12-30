@@ -228,6 +228,9 @@ function detectStrategy(indicators) {
   const priceAboveEMA50 = close > ema50;
   const ema20AboveEMA50 = ema20 > ema50;
 
+  // Calculate distance to EMA20 as percentage
+  const distToEMA20Pct = Math.abs((close - ema20) / ema20) * 100;
+
   // Pullback Strategy
   if (regime === "Bullish Trend" && priceAboveEMA50 && !priceAboveEMA20 && rsi14 < 50) {
     return "Pullback";
@@ -246,6 +249,12 @@ function detectStrategy(indicators) {
   // Trend Following
   if (regime === "Bullish Trend" && priceAboveEMA20 && ema20AboveEMA50 && rsi14 > 50 && rsi14 < 70) {
     return "Trend Following";
+  }
+
+  // Near Breakout - Added to catch stocks very close to breakout
+  // Criteria: Within 0.5% of EMA20, bullish structure (EMA20 > EMA50), neutral RSI
+  if (regime === "Consolidation" && ema20AboveEMA50 && distToEMA20Pct <= 0.5 && rsi14 >= 40 && rsi14 <= 60) {
+    return "Near Breakout";
   }
 
   return "Hold";
@@ -739,7 +748,7 @@ Ge ditt svar i exakt följande struktur på svenska:
 • **Volatilitet (ATR):** [ATR X.XX kr vilket motsvarar Y% av priset - är det hög (>3%), normal (1.5-3%) eller låg (<1.5%) volatilitet?]
 
 ## STRATEGI & RESONEMANG
-[Systemet har identifierat marknadsregimen och trading setup (se Tekniska indikatorer). Förklara VARFÖR denna klassificering gjorts baserat på förhållandet mellan Pris, EMA20 och EMA50. Jämför backtestresultaten för de olika strategierna och förklara vilken som fungerat bäst historiskt OCH om nuvarande marknadsläge matchar den strategin. Om ingen strategi passar (Setup = "Hold") - förklara exakt VARFÖR och vad som behöver förändras för att få en tradable setup.]
+[Systemet har identifierat marknadsregimen och trading setup (se Tekniska indikatorer). Förklara VARFÖR denna klassificering gjorts baserat på förhållandet mellan Pris, EMA20 och EMA50. Jämför backtestresultaten för de olika strategierna och förklara vilken som fungerat bäst historiskt OCH om nuvarande marknadsläge matchar den strategin. Om ingen strategi passar (Setup = "Hold") - förklara exakt VARFÖR och vad som behöver förändras för att få en tradable setup. Om Setup = "Near Breakout" - förklara att priset är MYCKET NÄRA (inom 0.5%) att bryta över EMA20 och detta är en perfekt bevakningssituation - en liten uppgång kan trigga ett köptillfälle.]
 
 ## HANDELSBESLUT
 **Rekommendation:** [KÖP / INVÄNTA / UNDVIK]

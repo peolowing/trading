@@ -179,6 +179,7 @@ export default function App() {
     "Breakout": "Breakout",
     "Reversal": "Reversal",
     "Trend Following": "Trendföljning",
+    "Near Breakout": "Nära Breakout",
     "Hold": "Ingen setup"
   };
   const setup = setupTranslations[indicators?.setup] || indicators?.setup || "N/A";
@@ -266,7 +267,27 @@ export default function App() {
           </div>
           <div>
             <p className="eyebrow">Setup</p>
-            <strong>{setup}</strong>
+            <strong style={{
+              color: indicators?.setup === "Near Breakout" ? "#16a34a" : "inherit",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px"
+            }}>
+              {setup}
+              {indicators?.setup === "Near Breakout" && (
+                <span style={{
+                  fontSize: "10px",
+                  fontWeight: "700",
+                  color: "#16a34a",
+                  background: "#dcfce7",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  animation: "pulse 2s infinite"
+                }}>
+                  🎯
+                </span>
+              )}
+            </strong>
           </div>
           <div>
             <p className="eyebrow">Relativ volym</p>
