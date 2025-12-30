@@ -128,27 +128,54 @@ export default function App() {
     }
   }
 
-  function extractTradeInfo(aiText) {
-    if (!aiText) return null;
+  function extractTradeInfo(aiText, currentPrice) {
+    if (!aiText) {
+      // No AI analysis - use current price
+      return {
+        entry: currentPrice || 0,
+        stopLoss: 0,
+        target: 0,
+        setupNotes: "",
+        recommendation: "MANUELL"
+      };
+    }
 
     // Extract recommendation
     const recMatch = aiText.match(/\*\*Rekommendation:\*\*\s*(KÖP|INVÄNTA|UNDVIK)/i);
-    const recommendation = recMatch ? recMatch[1].toUpperCase() : null;
+    const recommendation = recMatch ? recMatch[1].toUpperCase() : "OKÄND";
 
-    // Only allow buy if recommendation is KÖP
-    if (recommendation !== 'KÖP') return null;
+    // Extract entry level - look for both formats
+    let entry = currentPrice || 0;
+    const entryMatch1 = aiText.match(/\*\*Entry-nivå:\*\*\s*([\d,]+(?:[.,]\d+)?)/i);
+    const entryMatch2 = aiText.match(/Entry[-:]?\s*([\d,]+(?:[.,]\d+)?)/i);
 
-    // Extract entry level
-    const entryMatch = aiText.match(/\*\*Entry-nivå:\*\*\s*([\d,]+(?:\.\d+)?)/i);
-    const entry = entryMatch ? parseFloat(entryMatch[1].replace(',', '.')) : data?.candles?.[data.candles.length - 1]?.close || 0;
+    if (entryMatch1) {
+      entry = parseFloat(entryMatch1[1].replace(',', '.'));
+    } else if (entryMatch2) {
+      entry = parseFloat(entryMatch2[1].replace(',', '.'));
+    }
 
-    // Extract stop loss
-    const stopMatch = aiText.match(/\*\*Stop Loss:\*\*\s*([\d,]+(?:\.\d+)?)/i);
-    const stopLoss = stopMatch ? parseFloat(stopMatch[1].replace(',', '.')) : 0;
+    // Extract stop loss - look for both formats
+    let stopLoss = 0;
+    const stopMatch1 = aiText.match(/\*\*Stop Loss:\*\*\s*([\d,]+(?:[.,]\d+)?)/i);
+    const stopMatch2 = aiText.match(/Stop[-\s]?Loss[-:]?\s*([\d,]+(?:[.,]\d+)?)/i);
 
-    // Extract target
-    const targetMatch = aiText.match(/\*\*Target:\*\*\s*([\d,]+(?:\.\d+)?)/i);
-    const target = targetMatch ? parseFloat(targetMatch[1].replace(',', '.')) : 0;
+    if (stopMatch1) {
+      stopLoss = parseFloat(stopMatch1[1].replace(',', '.'));
+    } else if (stopMatch2) {
+      stopLoss = parseFloat(stopMatch2[1].replace(',', '.'));
+    }
+
+    // Extract target - look for both formats
+    let target = 0;
+    const targetMatch1 = aiText.match(/\*\*Target:\*\*\s*([\d,]+(?:[.,]\d+)?)/i);
+    const targetMatch2 = aiText.match(/Target[-:]?\s*([\d,]+(?:[.,]\d+)?)/i);
+
+    if (targetMatch1) {
+      target = parseFloat(targetMatch1[1].replace(',', '.'));
+    } else if (targetMatch2) {
+      target = parseFloat(targetMatch2[1].replace(',', '.'));
+    }
 
     // Extract setup notes (HANDELSBESLUT section)
     const setupMatch = aiText.match(/##\s*HANDELSBESLUT([\s\S]*?)(?=##|$)/i);
@@ -158,11 +185,8 @@ export default function App() {
   }
 
   function handleOpenBuyDialog() {
-    const tradeInfo = extractTradeInfo(data?.ai);
-    if (!tradeInfo) {
-      alert("Kan inte skapa köp - AI rekommenderar inte KÖP just nu");
-      return;
-    }
+    const currentPrice = data?.candles?.[data.candles.length - 1]?.close || 0;
+    const tradeInfo = extractTradeInfo(data?.ai, currentPrice);
 
     setTradeForm({
       quantity: 100,
