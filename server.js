@@ -14,7 +14,8 @@ import {
   backtestRepo,
   marketdataRepo,
   screenerRepo,
-  agentsRepo
+  agentsRepo,
+  aiAnalysisRepo
 } from "./repositories/index.js";
 import {
   positionService,
@@ -172,69 +173,22 @@ async function saveIndicators(ticker, date, indicators) {
   }
 }
 
-// Helper: Spara AI-analys (max 1 per dag)
+// Helper: Spara AI-analys (använder repository, sparar alla versioner)
 async function saveAIAnalysis(ticker, analysisText, scoring, backtest) {
-  if (!supabase) return false;
-  try {
-    const today = new Date().toISOString().split('T')[0];
-
-    // Kolla om AI-analys redan finns för idag
-    const { data: existing } = await supabase
-      .from('ai_analysis')
-      .select('id')
-      .eq('ticker', ticker)
-      .eq('analysis_date', today)
-      .single();
-
-    if (existing) {
-      console.log(`AI analysis already exists for ${ticker} today, skipping save`);
-      return false;
-    }
-
-    const { error } = await supabase
-      .from('ai_analysis')
-      .insert({
-        ticker,
-        analysis_date: today,
-        analysis_text: analysisText,
-        edge_score: scoring?.score,
-        edge_label: scoring?.label,
-        win_rate: backtest?.stats?.winRate,
-        total_return: backtest?.stats?.totalReturn,
-        trades_count: backtest?.stats?.trades
-      });
-
-    if (error) console.error("Supabase ai_analysis error:", error);
-    return true;
-  } catch (e) {
-    console.error("saveAIAnalysis error:", e);
-    return false;
-  }
+  return await aiAnalysisRepo.saveAnalysis(ticker, {
+    analysis_text: analysisText,
+    edge_score: scoring?.score,
+    edge_label: scoring?.label,
+    win_rate: backtest?.stats?.winRate,
+    total_return: backtest?.stats?.totalReturn,
+    trades_count: backtest?.stats?.trades
+  });
 }
 
-// Helper: Hämta AI-analys för idag
+// Helper: Hämta senaste AI-analys för idag
 async function getAIAnalysis(ticker) {
-  if (!supabase) return null;
-  try {
-    const today = new Date().toISOString().split('T')[0];
-
-    const { data, error } = await supabase
-      .from('ai_analysis')
-      .select('*')
-      .eq('ticker', ticker)
-      .eq('analysis_date', today)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error("Supabase getAIAnalysis error:", error);
-      return null;
-    }
-
-    return data;
-  } catch (e) {
-    console.error("getAIAnalysis error:", e);
-    return null;
-  }
+  const today = new Date().toISOString().split('T')[0];
+  return await aiAnalysisRepo.getLatestAnalysis(ticker, today);
 }
 
 // Helper: Spara backtest-resultat
@@ -717,16 +671,19 @@ app.post("/api/ai-analysis", async (req, res) => {
   try {
     // Extrahera ticker från data
     const ticker = data.ticker || "UNKNOWN";
+    const forceRefresh = data.force === true;
 
-    // Försök hämta AI-analys från cache (max 1 per dag)
-    const cachedAnalysis = await getAIAnalysis(ticker);
-    if (cachedAnalysis) {
-      console.log(`Using cached AI analysis for ${ticker}`);
-      return res.json({ analysis: cachedAnalysis.analysis_text });
+    // Försök hämta AI-analys från cache (om inte force refresh)
+    if (!forceRefresh) {
+      const cachedAnalysis = await getAIAnalysis(ticker);
+      if (cachedAnalysis) {
+        console.log(`Using cached AI analysis for ${ticker}`);
+        return res.json({ analysis: cachedAnalysis.analysis_text });
+      }
     }
 
-    // Om ingen cache finns, anropa OpenAI
-    console.log(`Fetching fresh AI analysis for ${ticker}`);
+    // Generera ny AI-analys
+    console.log(`Fetching fresh AI analysis for ${ticker}${forceRefresh ? ' (forced refresh)' : ''}`);
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -784,6 +741,32 @@ Ge ditt svar i exakt följande format:
   } catch (e) {
     console.error("AI analysis error:", e);
     res.status(500).json({ error: "Failed to get AI analysis" });
+  }
+});
+
+// GET /api/ai-analysis/history/:ticker - Hämta AI-analys historik
+app.get("/api/ai-analysis/history/:ticker", async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Hämta de 3 senaste analyserna
+    const analyses = await aiAnalysisRepo.getRecentAnalyses(ticker, today, 3);
+
+    // Jämför senaste med näst senaste om båda finns
+    let comparison = null;
+    if (analyses.length >= 2) {
+      comparison = aiAnalysisRepo.compareAnalyses(analyses[0], analyses[1]);
+    }
+
+    res.json({
+      analyses,
+      comparison,
+      count: analyses.length
+    });
+  } catch (e) {
+    console.error("AI analysis history error:", e);
+    res.status(500).json({ error: "Failed to get AI analysis history" });
   }
 });
 

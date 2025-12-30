@@ -24,10 +24,13 @@ export default function App() {
   const [learnMode, setLearnMode] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
   const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "position-detail", "closed-positions", or "closed-position-detail"
+  const [aiHistory, setAiHistory] = useState(null);
+  const [refreshingAi, setRefreshingAi] = useState(false);
 
   useEffect(() => {
     if (selectedStock) {
       loadData();
+      loadAiHistory();
     }
   }, [selectedStock]);
 
@@ -72,6 +75,47 @@ export default function App() {
       console.error(e);
       setError("Kunde inte ladda marknadsdata");
       setLoading(false);
+    }
+  }
+
+  async function loadAiHistory() {
+    try {
+      const response = await fetch(`/api/ai-analysis/history/${selectedStock}`);
+      if (response.ok) {
+        const history = await response.json();
+        setAiHistory(history);
+      }
+    } catch (e) {
+      console.warn("Could not load AI history:", e);
+    }
+  }
+
+  async function refreshAiAnalysis() {
+    if (refreshingAi) return;
+
+    setRefreshingAi(true);
+    try {
+      const response = await fetch("/api/ai-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: selectedStock,
+          candles: data.candles,
+          indicators: data.analysis.indicators,
+          force: true // Force new analysis
+        })
+      });
+
+      if (response.ok) {
+        const ai = await response.json();
+        setData(prev => ({ ...prev, ai: ai.analysis }));
+        // Reload history to get comparison
+        await loadAiHistory();
+      }
+    } catch (e) {
+      console.error("Failed to refresh AI analysis:", e);
+    } finally {
+      setRefreshingAi(false);
     }
   }
 
@@ -457,9 +501,82 @@ export default function App() {
 
       <div className="card">
         <div className="card-header">
-          <p className="eyebrow">AI-bedömning</p>
-          <span className="tag">GPT-4o-mini</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <p className="eyebrow">AI-bedömning</p>
+            <span className="tag">GPT-4o-mini</span>
+            {aiHistory?.count > 1 && (
+              <span style={{
+                fontSize: "11px",
+                color: "#6b7280",
+                background: "#f3f4f6",
+                padding: "2px 8px",
+                borderRadius: "4px"
+              }}>
+                {aiHistory.count} analyser idag
+              </span>
+            )}
+          </div>
+          <button
+            onClick={refreshAiAnalysis}
+            disabled={refreshingAi}
+            style={{
+              padding: "6px 12px",
+              fontSize: "12px",
+              fontWeight: "600",
+              background: refreshingAi ? "#9ca3af" : "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: refreshingAi ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            {refreshingAi ? "⏳ Uppdaterar..." : "🔄 Ny analys"}
+          </button>
         </div>
+
+        {/* Show comparison if exists */}
+        {aiHistory?.comparison?.hasChanges && (
+          <div style={{
+            background: "#fff7ed",
+            border: "1px solid #fed7aa",
+            borderRadius: "6px",
+            padding: "12px",
+            marginBottom: "15px",
+            fontSize: "13px"
+          }}>
+            <div style={{ fontWeight: "700", color: "#ea580c", marginBottom: "8px" }}>
+              📊 Ändringar sedan förra analysen
+            </div>
+
+            {aiHistory.comparison.edgeScore && (
+              <div style={{ marginBottom: "6px" }}>
+                <strong>Edge Score:</strong> {aiHistory.comparison.edgeScore.old} → {aiHistory.comparison.edgeScore.new}
+                <span style={{
+                  color: aiHistory.comparison.edgeScore.change > 0 ? "#16a34a" : "#dc2626",
+                  marginLeft: "6px"
+                }}>
+                  ({aiHistory.comparison.edgeScore.change > 0 ? "+" : ""}{aiHistory.comparison.edgeScore.change.toFixed(1)})
+                </span>
+              </div>
+            )}
+
+            {aiHistory.comparison.recommendation && (
+              <div style={{ marginBottom: "6px" }}>
+                <strong>Rekommendation:</strong> {aiHistory.comparison.recommendation.old} → {aiHistory.comparison.recommendation.new}
+              </div>
+            )}
+
+            {aiHistory.comparison.sections?.length > 0 && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "#6b7280" }}>
+                Ändrade sektioner: {aiHistory.comparison.sections.map(s => s.name).join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="ai-analysis">
           {ai?.split('\n').map((line, i) => {
             const trimmedLine = line.trim();
