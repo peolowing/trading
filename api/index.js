@@ -668,21 +668,22 @@ app.post("/api/analyze", async (req, res) => {
     }
 
     // Calculate trade recommendations (entry, stop, target)
+    // Always provide trade object for manual entry, even if setup is "Hold"
     const lastATR = atr14[atr14.length - 1];
     let trade = null;
 
-    if (setup !== "Hold" && lastATR) {
+    if (lastATR) {
       const entry = lastClose;
       const atrMultiplier = 1.5; // Stop distance
       const rrRatio = 2.0; // Risk/Reward ratio
 
-      // For long setups
-      if (regime === "Bullish Trend" || setup.includes("Pullback") || setup.includes("Breakout")) {
-        const stop = entry - (lastATR * atrMultiplier);
-        const target = entry + ((entry - stop) * rrRatio);
+      // For short setups (bearish)
+      if (regime === "Bearish Trend") {
+        const stop = entry + (lastATR * atrMultiplier);
+        const target = entry - ((stop - entry) * rrRatio);
 
         trade = {
-          direction: "LONG",
+          direction: "SHORT",
           entry: parseFloat(entry.toFixed(2)),
           stop: parseFloat(stop.toFixed(2)),
           target: parseFloat(target.toFixed(2)),
@@ -690,13 +691,13 @@ app.post("/api/analyze", async (req, res) => {
           atr: parseFloat(lastATR.toFixed(2))
         };
       }
-      // For short setups
-      else if (regime === "Bearish Trend") {
-        const stop = entry + (lastATR * atrMultiplier);
-        const target = entry - ((stop - entry) * rrRatio);
+      // Default to long setups for all other cases (including "Hold")
+      else {
+        const stop = entry - (lastATR * atrMultiplier);
+        const target = entry + ((entry - stop) * rrRatio);
 
         trade = {
-          direction: "SHORT",
+          direction: "LONG",
           entry: parseFloat(entry.toFixed(2)),
           stop: parseFloat(stop.toFixed(2)),
           target: parseFloat(target.toFixed(2)),
