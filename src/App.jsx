@@ -27,6 +27,14 @@ export default function App() {
   const [aiHistory, setAiHistory] = useState(null);
   const [refreshingAi, setRefreshingAi] = useState(false);
   const [selectedAnalysisTab, setSelectedAnalysisTab] = useState(0); // 0 = latest, 1 = previous, etc.
+  const [showBuyDialog, setShowBuyDialog] = useState(false);
+  const [tradeForm, setTradeForm] = useState({
+    quantity: 100,
+    price: 0,
+    stop_loss: 0,
+    target: 0,
+    setup_notes: ""
+  });
 
   useEffect(() => {
     if (selectedStock) {
@@ -117,6 +125,89 @@ export default function App() {
       console.error("Failed to refresh AI analysis:", e);
     } finally {
       setRefreshingAi(false);
+    }
+  }
+
+  function extractTradeInfo(aiText) {
+    if (!aiText) return null;
+
+    // Extract recommendation
+    const recMatch = aiText.match(/\*\*Rekommendation:\*\*\s*(KÖP|INVÄNTA|UNDVIK)/i);
+    const recommendation = recMatch ? recMatch[1].toUpperCase() : null;
+
+    // Only allow buy if recommendation is KÖP
+    if (recommendation !== 'KÖP') return null;
+
+    // Extract entry level
+    const entryMatch = aiText.match(/\*\*Entry-nivå:\*\*\s*([\d,]+(?:\.\d+)?)/i);
+    const entry = entryMatch ? parseFloat(entryMatch[1].replace(',', '.')) : data?.candles?.[data.candles.length - 1]?.close || 0;
+
+    // Extract stop loss
+    const stopMatch = aiText.match(/\*\*Stop Loss:\*\*\s*([\d,]+(?:\.\d+)?)/i);
+    const stopLoss = stopMatch ? parseFloat(stopMatch[1].replace(',', '.')) : 0;
+
+    // Extract target
+    const targetMatch = aiText.match(/\*\*Target:\*\*\s*([\d,]+(?:\.\d+)?)/i);
+    const target = targetMatch ? parseFloat(targetMatch[1].replace(',', '.')) : 0;
+
+    // Extract setup notes (HANDELSBESLUT section)
+    const setupMatch = aiText.match(/##\s*HANDELSBESLUT([\s\S]*?)(?=##|$)/i);
+    const setupNotes = setupMatch ? setupMatch[1].trim() : "";
+
+    return { entry, stopLoss, target, setupNotes, recommendation };
+  }
+
+  function handleOpenBuyDialog() {
+    const tradeInfo = extractTradeInfo(data?.ai);
+    if (!tradeInfo) {
+      alert("Kan inte skapa köp - AI rekommenderar inte KÖP just nu");
+      return;
+    }
+
+    setTradeForm({
+      quantity: 100,
+      price: tradeInfo.entry,
+      stop_loss: tradeInfo.stopLoss,
+      target: tradeInfo.target,
+      setup_notes: tradeInfo.setupNotes
+    });
+    setShowBuyDialog(true);
+  }
+
+  async function handleCreateTrade() {
+    try {
+      const trade = {
+        date: new Date().toISOString().split('T')[0],
+        ticker: selectedStock,
+        type: 'BUY',
+        quantity: tradeForm.quantity,
+        price: tradeForm.price,
+        strategy: 'AI Analysis',
+        stop_loss: tradeForm.stop_loss,
+        target: tradeForm.target,
+        setup_notes: tradeForm.setup_notes,
+        result_kr: null,
+        result_pct: null,
+        lessons_learned: null
+      };
+
+      const response = await fetch("/api/trades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(trade)
+      });
+
+      if (response.ok) {
+        alert("Trade skapad!");
+        setShowBuyDialog(false);
+        // Optionally navigate to dashboard or position view
+        setCurrentView("dashboard");
+      } else {
+        alert("Kunde inte skapa trade");
+      }
+    } catch (e) {
+      console.error("Failed to create trade:", e);
+      alert("Fel vid skapande av trade");
     }
   }
 
@@ -517,25 +608,45 @@ export default function App() {
               </span>
             )}
           </div>
-          <button
-            onClick={refreshAiAnalysis}
-            disabled={refreshingAi}
-            style={{
-              padding: "6px 12px",
-              fontSize: "12px",
-              fontWeight: "600",
-              background: refreshingAi ? "#9ca3af" : "#3b82f6",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: refreshingAi ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-          >
-            {refreshingAi ? "⏳ Uppdaterar..." : "🔄 Ny analys"}
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={handleOpenBuyDialog}
+              style={{
+                padding: "6px 12px",
+                fontSize: "12px",
+                fontWeight: "600",
+                background: "#22c55e",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              💰 Köp
+            </button>
+            <button
+              onClick={refreshAiAnalysis}
+              disabled={refreshingAi}
+              style={{
+                padding: "6px 12px",
+                fontSize: "12px",
+                fontWeight: "600",
+                background: refreshingAi ? "#9ca3af" : "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: refreshingAi ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              {refreshingAi ? "⏳ Uppdaterar..." : "🔄 Ny analys"}
+            </button>
+          </div>
         </div>
 
         {/* Show comparison if exists */}
@@ -716,6 +827,182 @@ export default function App() {
           </p>
         )}
       </div>
+
+      {/* Buy Dialog */}
+      {showBuyDialog && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: "12px",
+            padding: "24px",
+            maxWidth: "500px",
+            width: "90%",
+            maxHeight: "90vh",
+            overflow: "auto"
+          }}>
+            <h2 style={{ marginTop: 0, marginBottom: "20px" }}>Skapa köp för {selectedStock}</h2>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
+                  Antal aktier
+                </label>
+                <input
+                  type="number"
+                  value={tradeForm.quantity}
+                  onChange={(e) => setTradeForm({ ...tradeForm, quantity: parseInt(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
+                  Entry-pris (SEK)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={tradeForm.price}
+                  onChange={(e) => setTradeForm({ ...tradeForm, price: parseFloat(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
+                  Stop Loss (SEK)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={tradeForm.stop_loss}
+                  onChange={(e) => setTradeForm({ ...tradeForm, stop_loss: parseFloat(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
+                  Target (SEK)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={tradeForm.target}
+                  onChange={(e) => setTradeForm({ ...tradeForm, target: parseFloat(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "6px" }}>
+                  Setup-anteckningar
+                </label>
+                <textarea
+                  value={tradeForm.setup_notes}
+                  onChange={(e) => setTradeForm({ ...tradeForm, setup_notes: e.target.value })}
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    fontFamily: "inherit",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+
+              {/* Summary */}
+              <div style={{
+                background: "#f9fafb",
+                border: "1px solid #e5e7eb",
+                borderRadius: "6px",
+                padding: "12px",
+                fontSize: "13px"
+              }}>
+                <div style={{ fontWeight: "600", marginBottom: "8px" }}>Sammanfattning:</div>
+                <div>Totalt belopp: {(tradeForm.quantity * tradeForm.price).toFixed(2)} SEK</div>
+                <div>Risk per aktie: {(tradeForm.price - tradeForm.stop_loss).toFixed(2)} SEK</div>
+                <div>Total risk: {(tradeForm.quantity * (tradeForm.price - tradeForm.stop_loss)).toFixed(2)} SEK</div>
+                <div>Potentiell vinst: {(tradeForm.quantity * (tradeForm.target - tradeForm.price)).toFixed(2)} SEK</div>
+                <div>Risk/Reward: 1:{((tradeForm.target - tradeForm.price) / (tradeForm.price - tradeForm.stop_loss)).toFixed(2)}</div>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                <button
+                  onClick={handleCreateTrade}
+                  style={{
+                    flex: 1,
+                    padding: "10px 16px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    background: "#22c55e",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Bekräfta köp
+                </button>
+                <button
+                  onClick={() => setShowBuyDialog(false)}
+                  style={{
+                    flex: 1,
+                    padding: "10px 16px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    background: "#6b7280",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
