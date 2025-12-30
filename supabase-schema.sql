@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS indicators (
 CREATE INDEX IF NOT EXISTS idx_indicators_ticker ON indicators(ticker);
 CREATE INDEX IF NOT EXISTS idx_indicators_ticker_date ON indicators(ticker, date);
 
--- Tabell för AI-analyser (max 1 per dag per aktie)
+-- Tabell för AI-analyser (upp till 3 per dag per aktie)
 CREATE TABLE IF NOT EXISTS ai_analysis (
   id BIGSERIAL PRIMARY KEY,
   ticker VARCHAR(20) NOT NULL,
@@ -49,9 +49,12 @@ CREATE TABLE IF NOT EXISTS ai_analysis (
   win_rate DECIMAL(5, 4),
   total_return DECIMAL(10, 4),
   trades_count INTEGER,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(ticker, analysis_date)
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Index för snabba queries sorterade på created_at
+CREATE INDEX IF NOT EXISTS idx_ai_analysis_ticker_date_created
+ON ai_analysis(ticker, analysis_date, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_ticker ON ai_analysis(ticker);
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_date ON ai_analysis(analysis_date);
