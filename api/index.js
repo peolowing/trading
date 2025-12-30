@@ -730,21 +730,22 @@ VIKTIGT: Svara ENDAST på svenska. All text ska vara på svenska.
 Ge ditt svar i exakt följande struktur på svenska:
 
 ## MARKNADSLÄGE
-[2-3 meningar om trenden, nuvarande prisnivå och om aktien är i en uppåt-, nedåt- eller sidledes trend]
+[2-3 meningar om trenden. Beskriv TYDLIGT förhållandet mellan Pris, EMA20 och EMA50 med konkreta siffror. Exempel: "Priset (79 kr) ligger UNDER EMA20 (90 kr) vilket indikerar svaghet" eller "Priset (95 kr) ligger ÖVER både EMA20 (90 kr) och EMA50 (88 kr) vilket bekräftar upptrend". Förklara om det är uppåt-, nedåt- eller sidledes trend och VARFÖR.]
 
 ## TEKNISKA SIGNALER
-• **RSI:** [Nuvarande RSI-värde och vad det betyder - överköpt/översålt/neutralt]
-• **EMAs:** [Relation mellan pris, EMA20 och EMA50 - är det bullish/bearish crossover?]
-• **Volym:** [Jämför senaste volymen med genomsnittet - stigande/fallande aktivitet]
-• **Volatilitet (ATR):** [Kommentera nuvarande volatilitet och vad det betyder för risk]
+• **RSI:** [Nuvarande RSI-värde och vad det betyder - överköpt/översålt/neutralt. Förklara om det stödjer eller motsäger trenden.]
+• **EMAs:** [Ange EXAKT förhållande med siffror: "Pris (X kr) vs EMA20 (Y kr) vs EMA50 (Z kr)". Förklara om detta är bullish (Pris > EMA20 > EMA50) eller bearish (Pris < EMA20 < EMA50) eller consolidation.]
+• **Volym:** [Relativ volym X.XX - är det hög (>1.0), normal (0.7-1.0) eller låg (<0.7) aktivitet? Vad betyder det?]
+• **Volatilitet (ATR):** [ATR X.XX kr vilket motsvarar Y% av priset - är det hög (>3%), normal (1.5-3%) eller låg (<1.5%) volatilitet?]
 
 ## STRATEGI & RESONEMANG
-[Förklara VILKEN strategi som passar bäst för nuvarande setup och VARFÖR. Jämför resultaten från backtesten för de olika strategierna (Pullback, Breakout, Reversal, Trend Following) och förklara varför den ena är bättre än den andra i nuläget.]
+[Systemet har identifierat marknadsregimen och trading setup (se Tekniska indikatorer). Förklara VARFÖR denna klassificering gjorts baserat på förhållandet mellan Pris, EMA20 och EMA50. Jämför backtestresultaten för de olika strategierna och förklara vilken som fungerat bäst historiskt OCH om nuvarande marknadsläge matchar den strategin. Om ingen strategi passar (Setup = "Hold") - förklara exakt VARFÖR och vad som behöver förändras för att få en tradable setup.]
 
 ## HANDELSBESLUT
 **Rekommendation:** [KÖP / INVÄNTA / UNDVIK]
-**Motivering:** [1-2 meningar om varför detta beslut]
-**Entry-nivå:** [Konkret prisnivå för entry om setup finns]
+**Motivering:** [2-3 meningar som FÖRKLARAR varför detta beslut. Om INVÄNTA - förklara exakt VAD som saknas (t.ex. "Priset måste över EMA20 (X kr)", "Vänta på volym >1.0x", "RSI behöver nå 50-60"). Om KÖP - förklara vad som är BRA. Om UNDVIK - förklara vad som är DÅLIGT.]
+**Entry-nivå:** [Om KÖP: konkret prisnivå. Om INVÄNTA: "Vänta tills [KONKRET VILLKOR uppfylls]"]
+**Vad händer nästa:** [Beskriv exakt vad som behöver hända för att setupen ska bli tradable]
 
 ## RISK & POSITIONSSTORLEK
 **Stop Loss:** [Konkret stop loss-nivå baserat på ATR eller support/resistance]
@@ -765,11 +766,12 @@ Ge ditt svar i exakt följande struktur på svenska:
 Senaste stängning: ${candles[candles.length - 1].close.toFixed(2)} (${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%)
 
 Tekniska indikatorer:
-- EMA20: ${indicators.ema20?.toFixed(2) || 'N/A'}
-- EMA50: ${indicators.ema50?.toFixed(2) || 'N/A'}
+- Nuvarande pris: ${candles[candles.length - 1].close.toFixed(2)} kr
+- EMA20: ${indicators.ema20?.toFixed(2) || 'N/A'} kr
+- EMA50: ${indicators.ema50?.toFixed(2) || 'N/A'} kr
 - RSI(14): ${indicators.rsi14?.toFixed(2) || 'N/A'}
-- ATR(14): ${indicators.atr14?.toFixed(2) || 'N/A'}
-- Relativ volym: ${indicators.relativeVolume?.toFixed(2) || 'N/A'}
+- ATR(14): ${indicators.atr14?.toFixed(2) || 'N/A'} kr (${indicators.atr14 && candles[candles.length - 1].close ? ((indicators.atr14 / candles[candles.length - 1].close) * 100).toFixed(2) : 'N/A'}%)
+- Relativ volym: ${indicators.relativeVolume?.toFixed(2) || 'N/A'}x
 - Regime: ${indicators.regime || 'N/A'}
 - Setup: ${indicators.setup || 'N/A'}
 
