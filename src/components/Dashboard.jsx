@@ -573,13 +573,27 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
         </div>
 
         {watchlist.length > 0 && (
-          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", fontSize: "11px", flexWrap: "wrap" }}>
-            <span style={{ color: "#64748b" }}>🔵 Vänta</span>
-            <span style={{ color: "#64748b" }}>🟡 Närmar sig</span>
-            <span style={{ color: "#64748b" }}>🟢 Klar</span>
-            <span style={{ color: "#64748b" }}>🟠 Breakout</span>
-            <span style={{ color: "#64748b" }}>🔴 Ta bort</span>
-          </div>
+          <>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "8px", fontSize: "11px", flexWrap: "wrap" }}>
+              <span style={{ color: "#64748b" }}>🔵 Vänta</span>
+              <span style={{ color: "#64748b" }}>🟡 Närmar sig</span>
+              <span style={{ color: "#64748b" }}>🟢 Klar</span>
+              <span style={{ color: "#64748b" }}>🟠 Breakout</span>
+              <span style={{ color: "#64748b" }}>🔴 Ta bort</span>
+            </div>
+            <div style={{
+              background: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              borderRadius: "6px",
+              padding: "8px 12px",
+              marginBottom: "12px",
+              fontSize: "11px",
+              color: "#065f46"
+            }}>
+              <strong>🎯 Breakout Alert:</strong> Visar när priset är <strong>inom 0.5%</strong> från EMA20.
+              Detta är perfekt tidpunkt att bevaka för entry! Kolumnen "EMA20 Δ%" visar exakt avstånd.
+            </div>
+          </>
         )}
 
         {watchlist.length === 0 ? (
@@ -634,8 +648,13 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     // EMA20 distance color coding
                     let ema20Color = "#64748b";
                     const emaDist = item.dist_ema20_pct;
+                    let showBreakoutAlert = false;
                     if (emaDist !== null && emaDist !== undefined) {
-                      if (Math.abs(emaDist) <= 1.5) ema20Color = "#16a34a"; // Perfect pullback
+                      if (Math.abs(emaDist) <= 0.5) {
+                        ema20Color = "#16a34a"; // VERY close to breakout
+                        showBreakoutAlert = true;
+                      }
+                      else if (Math.abs(emaDist) <= 1.5) ema20Color = "#16a34a"; // Perfect pullback
                       else if (Math.abs(emaDist) <= 3) ema20Color = "#3b82f6"; // Approaching
                       else if (Math.abs(emaDist) > 5) ema20Color = "#f59e0b"; // Too far
                     }
@@ -709,7 +728,22 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
 
                         {/* Aktie */}
                         <td style={{ padding: "10px 12px" }} onClick={() => onSelectStock(item.ticker)}>
-                          <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
+                            {showBreakoutAlert && (
+                              <span style={{
+                                fontSize: "10px",
+                                fontWeight: "700",
+                                color: "#16a34a",
+                                background: "#dcfce7",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                animation: "pulse 2s infinite"
+                              }}>
+                                🎯 BREAKOUT!
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Yahoo Finance Link */}
@@ -785,8 +819,28 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* EMA20 Δ% */}
-                        <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: "600", color: ema20Color, fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
-                          {emaDist !== null && emaDist !== undefined ? `${emaDist > 0 ? '+' : ''}${emaDist.toFixed(1)}%` : "—"}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                          {emaDist !== null && emaDist !== undefined ? (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                              <span style={{
+                                fontWeight: "600",
+                                color: ema20Color,
+                                fontVariantNumeric: "tabular-nums",
+                                fontSize: showBreakoutAlert ? "14px" : "13px"
+                              }}>
+                                {emaDist > 0 ? '+' : ''}{emaDist.toFixed(1)}%
+                              </span>
+                              {showBreakoutAlert && (
+                                <span style={{
+                                  fontSize: "9px",
+                                  color: "#16a34a",
+                                  fontWeight: "700"
+                                }}>
+                                  ↗ NÄRA!
+                                </span>
+                              )}
+                            </div>
+                          ) : "—"}
                         </td>
 
                         {/* RSI-zon */}
