@@ -26,7 +26,7 @@ export default async function handler(req, res) {
         .from('screener_stocks')
         .select('*')
         .eq('is_active', true)
-        .order('ticker', { ascending: true });
+        .order('edge_score', { ascending: false });
 
       if (error) throw error;
 
@@ -34,20 +34,23 @@ export default async function handler(req, res) {
         ticker: stock.ticker,
         name: stock.name,
         bucket: stock.bucket,
-        edgeScore: 50, // Placeholder
-        price: null,
-        ema20: null,
-        ema50: null,
-        rsi: null,
-        atr: null,
-        relativeVolume: null,
-        regime: null,
-        setup: null
+        edgeScore: stock.edge_score || 50,
+        price: stock.price,
+        ema20: stock.ema20,
+        ema50: stock.ema50,
+        rsi: stock.rsi,
+        atr: stock.atr,
+        relativeVolume: stock.relative_volume,
+        regime: stock.regime,
+        setup: stock.setup,
+        volume: stock.volume,
+        turnoverMSEK: stock.turnover_msek,
+        lastCalculated: stock.last_calculated
       }));
 
       return res.json({
         stocks: stocksWithScores,
-        note: "Simplified screener. Run full screener via background job."
+        lastUpdate: stocks[0]?.last_calculated || null
       });
     } catch (error) {
       console.error("Error in /api/screener:", error);
