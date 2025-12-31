@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import EntryModal from "./EntryModal";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition }) {
+  const { user, signOut } = useAuth();
   const [watchlist, setWatchlist] = useState([]);
   const [liveData, setLiveData] = useState({});
   const [refreshingLive, setRefreshingLive] = useState(false);
@@ -263,6 +265,11 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
         <div>
           <p className="eyebrow">Veckotrading AI</p>
           <h1>📈 Dashboard</h1>
+          {user && (
+            <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
+              {user.email}
+            </p>
+          )}
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <button
@@ -300,6 +307,24 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
             }}
           >
             🤖 Trading Agents
+          </button>
+          <button
+            onClick={() => signOut()}
+            style={{
+              padding: "10px 20px",
+              background: "#ef4444",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            🚪 Logga ut
           </button>
         </div>
       </header>

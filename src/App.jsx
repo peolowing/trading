@@ -17,8 +17,11 @@ import ClosedPositionDetail from "./components/ClosedPositionDetail";
 import AgentsDashboard from "./components/AgentsDashboard";
 import WatchlistLive from "./components/WatchlistLive";
 import EntryModal from "./components/EntryModal";
+import AuthModal from "./components/Auth/AuthModal";
+import { useAuth } from "./contexts/AuthContext";
 
 export default function App() {
+  const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -243,6 +246,27 @@ export default function App() {
     if (!data?.candles) return [];
     return data.candles.slice(-90).map(c => ({ date: c.date, close: c.close }));
   }, [data]);
+
+  // Show loading screen while checking auth
+  if (authLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        fontSize: '1.2rem',
+        color: '#666'
+      }}>
+        Laddar...
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!user) {
+    return <AuthModal onClose={() => {}} />;
+  }
 
   // Render Dashboard as default view
   if (currentView === "dashboard") {
