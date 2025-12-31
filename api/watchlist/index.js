@@ -281,7 +281,32 @@ export default async function handler(req, res) {
     }
   }
 
-  // DELETE is handled by /api/watchlist/[ticker].js
+  // DELETE /api/watchlist/:ticker - Remove from watchlist
+  if (method === 'DELETE') {
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase not configured" });
+    }
+
+    try {
+      // Extract ticker from pathname
+      const ticker = pathname.split('/').pop();
+
+      if (!ticker || ticker === 'watchlist') {
+        return res.status(400).json({ error: "Ticker is required" });
+      }
+
+      const { error } = await supabase
+        .from('watchlist')
+        .delete()
+        .eq('ticker', ticker.toUpperCase());
+
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    } catch (e) {
+      console.error("Delete from watchlist error:", e);
+      return res.status(500).json({ error: "Failed to delete from watchlist" });
+    }
+  }
 
   // Method not allowed
   return res.status(405).json({ error: `Method ${method} not allowed` });
