@@ -11,8 +11,9 @@
     "build:prod": "NODE_ENV=production vite build",
     "preview": "vite preview",
     "vercel:dev": "vercel dev",
+    "deploy": "./deploy.sh",
+    "deploy:prod": "./deploy.sh --prod",
     "deploy:preview": "vercel",
-    "deploy:prod": "vercel --prod",
     "test": "vitest"
   },
   "dependencies": {

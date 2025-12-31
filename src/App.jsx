@@ -3,6 +3,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -66,7 +67,12 @@ export default function App() {
         const aiResponse = await fetch("/api/ai-analysis", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticker: selectedStock, candles, indicators: analysis.indicators })
+          body: JSON.stringify({
+            ticker: selectedStock,
+            candles,
+            indicators: analysis.indicators,
+            trade: analysis.trade // Include calculated trade values
+          })
         });
         if (aiResponse.ok) {
           const ai = await aiResponse.json();
@@ -109,6 +115,7 @@ export default function App() {
           ticker: selectedStock,
           candles: data.candles,
           indicators: data.analysis.indicators,
+          trade: data.analysis.trade, // Include calculated trade values
           force: true // Force new analysis
         })
       });
@@ -244,7 +251,36 @@ export default function App() {
 
   const chartData = useMemo(() => {
     if (!data?.candles) return [];
-    return data.candles.slice(-90).map(c => ({ date: c.date, close: c.close }));
+
+    // Calculate EMA
+    const calculateEMA = (values, period) => {
+      const k = 2 / (period + 1);
+      const emaData = [];
+      let ema = values.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+      emaData.push(ema);
+      for (let i = period; i < values.length; i++) {
+        ema = values[i] * k + ema * (1 - k);
+        emaData.push(ema);
+      }
+      return emaData;
+    };
+
+    // Calculate EMAs from all available data
+    const allCloses = data.candles.map(c => c.close);
+    const ema20Full = calculateEMA(allCloses, 20);
+    const ema50Full = calculateEMA(allCloses, 50);
+
+    // Take last 90 values
+    const recent90 = data.candles.slice(-90);
+    const ema20Recent = ema20Full.slice(-90);
+    const ema50Recent = ema50Full.slice(-90);
+
+    return recent90.map((c, i) => ({
+      date: c.date,
+      close: c.close,
+      ema20: ema20Recent[i],
+      ema50: ema50Recent[i]
+    }));
   }, [data]);
 
   // Show loading screen while checking auth
@@ -386,15 +422,11 @@ export default function App() {
     console.log("Current Position:", currentPosition);
   }
 
-  // Calculate entry/stop/target for TradeChart
-  const last = data.candles.at(-1);
-  const prevLow = Math.min(...data.candles.slice(-10).map(c => c.low));
-
-  const entry = last.high;
-  const stop = prevLow;
-  const risk = entry - stop;
-  const target = entry + risk * 2.2; // 1:2.2 R/R
-  const rr = (target - entry) / risk;
+  // Use trade values from backend analysis (same as buy dialog)
+  const entry = data?.analysis?.trade?.entry || data.candles.at(-1).close;
+  const stop = data?.analysis?.trade?.stop || entry - 5;
+  const target = data?.analysis?.trade?.target || entry + 10;
+  const rr = data?.analysis?.trade?.rr || 2.0;
 
   return (
     <div className="container">
@@ -484,42 +516,64 @@ export default function App() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card chart-card">
         <div className="card-header">
-          <p className="eyebrow">Trade-plan med Risk/Reward</p>
-          <span className="tag">Entry/Stop/Target</span>
+          <p className="eyebrow">Pris senaste 90 dagar</p>
+          <span className="tag">Recharts</span>
         </div>
-        <TradeChart
-          candles={data.candles}
-          entry={entry}
-          stop={stop}
-          target={target}
-        />
+        <div className="chart-shell">
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="closeArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} domain={["auto", "auto"]} />
+              <Tooltip />
+              <Area type="monotone" dataKey="close" stroke="#4f46e5" fill="url(#closeArea)" />
+              <Line type="monotone" dataKey="ema20" stroke="#f97316" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="ema50" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+              {currentPosition && (
+                <>
+                  <ReferenceLine y={currentPosition.entry} stroke="#3b82f6" strokeDasharray="3 3" label={{ value: "Entry", position: "right", fill: "#3b82f6", fontSize: 11 }} />
+                  <ReferenceLine y={currentPosition.stop} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Stop", position: "right", fill: "#ef4444", fontSize: 11 }} />
+                  <ReferenceLine y={currentPosition.target} stroke="#22c55e" strokeDasharray="3 3" label={{ value: "Target", position: "right", fill: "#22c55e", fontSize: 11 }} />
+                </>
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
         <div style={{ marginTop: "12px", padding: "10px", background: "#f8fafc", borderRadius: "8px", fontSize: "13px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", alignItems: "center" }}>
             <div>
-              <p className="eyebrow">Entry</p>
-              <strong style={{ color: "#16a34a" }}>${entry.toFixed(2)}</strong>
+              <span style={{ color: "#f97316", fontWeight: "600" }}>━━</span> EMA20
             </div>
             <div>
-              <p className="eyebrow">Stop</p>
-              <strong style={{ color: "#dc2626" }}>${stop.toFixed(2)}</strong>
+              <span style={{ color: "#8b5cf6", fontWeight: "600" }}>━━</span> EMA50
             </div>
-            <div>
-              <p className="eyebrow">Target</p>
-              <strong style={{ color: "#2563eb" }}>${target.toFixed(2)}</strong>
-            </div>
-            <div>
-              <p className="eyebrow">Risk/Reward</p>
-              <strong className={rr >= 2 ? "good" : "bad"}>1:{rr.toFixed(2)}</strong>
-            </div>
+            {currentPosition && (
+              <>
+                <div style={{ marginLeft: "auto" }}>
+                  <strong style={{ color: "#0f172a" }}>Aktiv position:</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#3b82f6" }}>● Entry:</span> ${currentPosition.entry.toFixed(2)}
+                </div>
+                <div>
+                  <span style={{ color: "#ef4444" }}>● Stop:</span> ${currentPosition.stop.toFixed(2)}
+                </div>
+                <div>
+                  <span style={{ color: "#22c55e" }}>● Target:</span> ${currentPosition.target.toFixed(2)}
+                </div>
+              </>
+            )}
           </div>
         </div>
-        {learnMode && (
-          <p className="note">
-            Entry = senaste högsta, Stop = lägsta av senaste 10 dagarna, Target = 2.2x risk. Blå zon = belöning, röd zon = risk.
-          </p>
-        )}
+        {learnMode && <p className="note">Diagrammet visar stängningspriset med EMA20 (orange) och EMA50 (lila). Håll musen över för exakta värden.</p>}
       </div>
 
       <div className="grid">
@@ -594,53 +648,43 @@ export default function App() {
           </div>
         </div>
 
-        <div className="card chart-card">
-          <div className="card-header">
-            <p className="eyebrow">Pris senaste 90 dagar</p>
-            <span className="tag">Recharts</span>
-          </div>
-          <div className="chart-shell">
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="closeArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} domain={["auto", "auto"]} />
-                <Tooltip />
-                <Area type="monotone" dataKey="close" stroke="#4f46e5" fill="url(#closeArea)" />
-                {currentPosition && (
-                  <>
-                    <ReferenceLine y={currentPosition.entry} stroke="#3b82f6" strokeDasharray="3 3" label={{ value: "Entry", position: "right", fill: "#3b82f6", fontSize: 11 }} />
-                    <ReferenceLine y={currentPosition.stop} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Stop", position: "right", fill: "#ef4444", fontSize: 11 }} />
-                    <ReferenceLine y={currentPosition.target} stroke="#22c55e" strokeDasharray="3 3" label={{ value: "Target", position: "right", fill: "#22c55e", fontSize: 11 }} />
-                  </>
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          {currentPosition && (
-            <div style={{ marginTop: "12px", padding: "10px", background: "#f8fafc", borderRadius: "8px", fontSize: "13px" }}>
-              <strong style={{ color: "#0f172a" }}>Aktiv position:</strong>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginTop: "6px" }}>
-                <div>
-                  <span style={{ color: "#3b82f6" }}>● Entry:</span> ${currentPosition.entry.toFixed(2)}
-                </div>
-                <div>
-                  <span style={{ color: "#ef4444" }}>● Stop:</span> ${currentPosition.stop.toFixed(2)}
-                </div>
-                <div>
-                  <span style={{ color: "#22c55e" }}>● Target:</span> ${currentPosition.target.toFixed(2)}
-                </div>
-              </div>
-            </div>
-          )}
-          {learnMode && <p className="note">Diagrammet visar stängningspriset; håll musen över för exakta värden.</p>}
+        <div className="card">
+        <div className="card-header">
+          <p className="eyebrow">Trade-plan med Risk/Reward</p>
+          <span className="tag">Entry/Stop/Target</span>
         </div>
+        <TradeChart
+          candles={data.candles}
+          entry={entry}
+          stop={stop}
+          target={target}
+        />
+        <div style={{ marginTop: "12px", padding: "10px", background: "#f8fafc", borderRadius: "8px", fontSize: "13px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+            <div>
+              <p className="eyebrow">Entry</p>
+              <strong style={{ color: "#16a34a" }}>${entry.toFixed(2)}</strong>
+            </div>
+            <div>
+              <p className="eyebrow">Stop</p>
+              <strong style={{ color: "#dc2626" }}>${stop.toFixed(2)}</strong>
+            </div>
+            <div>
+              <p className="eyebrow">Target</p>
+              <strong style={{ color: "#2563eb" }}>${target.toFixed(2)}</strong>
+            </div>
+            <div>
+              <p className="eyebrow">Risk/Reward</p>
+              <strong className={rr >= 2 ? "good" : "bad"}>1:{rr.toFixed(2)}</strong>
+            </div>
+          </div>
+        </div>
+        {learnMode && (
+          <p className="note">
+            Entry = senaste högsta, Stop = lägsta av senaste 10 dagarna, Target = 2.2x risk. Blå zon = belöning, röd zon = risk.
+          </p>
+        )}
+      </div>
       </div>
 
       <div className="card">

@@ -714,13 +714,13 @@ Ge ditt svar i exakt följande format:
 ## HANDELSBESLUT
 **Rekommendation:** [KÖP / INVÄNTA / UNDVIK]
 **Motivering:** [1-2 meningar om varför detta beslut]
-**Entry-nivå:** [Konkret prisnivå för entry om setup finns]
+**Entry-nivå:** [Använd EXAKT värdet från data.trade.entry om det finns]
 
 ## RISK & POSITIONSSTORLEK
-**Stop Loss:** [Konkret stop loss-nivå baserat på ATR eller support/resistance]
-**Target:** [Konkret målpris baserat på risk/reward ratio]
-**Risk/Reward:** [Förhållande, t.ex. 1:2 eller 1:3]
-**Position Size:** [Förslag baserat på ATR och risk - t.ex. "Med 2% kontorisk motsvarar detta X aktier"]
+**Stop Loss:** [Använd EXAKT värdet från data.trade.stop om det finns - ange även i SEK med valutan]
+**Target:** [Använd EXAKT värdet från data.trade.target om det finns - ange även i SEK med valutan]
+**Risk/Reward:** [Använd EXAKT värdet från data.trade.rr, formaterat som 1:X.XX]
+**Position Size:** [Förslag baserat på data.trade.atr och risk - t.ex. "Med 2% kontorisk och stop på X SEK motsvarar detta Y aktier"]
 
 ## BACKTEST-INSIKTER
 [2-3 meningar om vad backtestet visar - vinstprocent, genomsnittlig vinst/förlust, antal signaler]
@@ -1443,7 +1443,20 @@ app.get("/api/watchlist", async (req, res) => {
   try {
     const stocks = await watchlistRepo.findAll();
 
-    // Enrich with current price and turnover
+    // Fetch edge scores from screener_stocks
+    const tickers = stocks.map(s => s.ticker);
+    const { data: screenerData } = await supabase
+      .from('screener_stocks')
+      .select('ticker, edge_score, regime, setup')
+      .in('ticker', tickers);
+
+    // Create a map of ticker -> screener info
+    const screenerMap = new Map();
+    (screenerData || []).forEach(s => {
+      screenerMap.set(s.ticker, s);
+    });
+
+    // Enrich with current price, turnover and edge_score
     const enrichedStocks = await Promise.all(
       stocks.map(async (stock) => {
         try {
@@ -1456,6 +1469,8 @@ app.get("/api/watchlist", async (req, res) => {
             interval: "1d"
           });
 
+          const screenerInfo = screenerMap.get(stock.ticker);
+
           if (data && data.length > 0) {
             const latest = data[data.length - 1];
             const turnoverMSEK = (latest.close * latest.volume) / 1_000_000;
@@ -1463,14 +1478,28 @@ app.get("/api/watchlist", async (req, res) => {
             return {
               ...stock,
               current_price: latest.close,
-              turnoverMSEK: parseFloat(turnoverMSEK.toFixed(1))
+              turnoverMSEK: parseFloat(turnoverMSEK.toFixed(1)),
+              edge_score: screenerInfo?.edge_score,
+              regime: screenerInfo?.regime || stock.initial_regime,
+              setup: screenerInfo?.setup || stock.initial_setup
             };
           }
 
-          return stock;
+          return {
+            ...stock,
+            edge_score: screenerInfo?.edge_score,
+            regime: screenerInfo?.regime || stock.initial_regime,
+            setup: screenerInfo?.setup || stock.initial_setup
+          };
         } catch (e) {
           console.warn(`Failed to enrich ${stock.ticker}:`, e.message);
-          return stock;
+          const screenerInfo = screenerMap.get(stock.ticker);
+          return {
+            ...stock,
+            edge_score: screenerInfo?.edge_score,
+            regime: screenerInfo?.regime || stock.initial_regime,
+            setup: screenerInfo?.setup || stock.initial_setup
+          };
         }
       })
     );

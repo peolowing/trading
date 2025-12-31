@@ -180,13 +180,40 @@ export default async function handler(req, res) {
     }
 
     try {
-      const { data, error } = await supabase
+      // First get all watchlist items
+      const { data: watchlistData, error: watchlistError } = await supabase
         .from('watchlist')
         .select('*')
         .order('added_at', { ascending: false });
 
-      if (error) throw error;
-      return res.json({ stocks: data || [] });
+      if (watchlistError) throw watchlistError;
+
+      // Then fetch edge scores for these tickers from screener_stocks
+      const tickers = watchlistData?.map(w => w.ticker) || [];
+      const { data: screenerData } = await supabase
+        .from('screener_stocks')
+        .select('ticker, edge_score, regime, setup')
+        .in('ticker', tickers);
+
+      // Create a map of ticker -> screener data
+      const screenerMap = new Map();
+      (screenerData || []).forEach(s => {
+        screenerMap.set(s.ticker, s);
+      });
+
+      // Merge the data
+      const stocks = (watchlistData || []).map(stock => {
+        const screenerInfo = screenerMap.get(stock.ticker);
+        console.log(`[Watchlist] ${stock.ticker}: edge_score=${screenerInfo?.edge_score}`);
+        return {
+          ...stock,
+          edge_score: screenerInfo?.edge_score,
+          regime: screenerInfo?.regime || stock.initial_regime,
+          setup: screenerInfo?.setup || stock.initial_setup
+        };
+      });
+
+      return res.json({ stocks });
     } catch (e) {
       console.error("Get watchlist error:", e);
       return res.status(500).json({ error: "Failed to fetch watchlist" });

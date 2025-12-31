@@ -133,13 +133,13 @@ h1 {
 
 @media (min-width: 768px) {
   .grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 400px 1fr;
   }
 }
 
 @media (min-width: 1024px) {
   .grid {
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: 400px 1fr;
   }
 }
 

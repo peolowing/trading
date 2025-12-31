@@ -48,6 +48,14 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
       const res = await fetch("/api/watchlist");
       const data = await res.json();
       const stocks = data.stocks || [];
+
+      // Debug: Log the received data
+      console.log('Dashboard - Watchlist API response:', data);
+      console.log('Dashboard - Stocks array:', stocks);
+      stocks.forEach(stock => {
+        console.log(`${stock.ticker}: edge_score=${stock.edge_score}, regime=${stock.regime}`);
+      });
+
       setWatchlist(stocks);
 
       // Fetch live data for all watchlist stocks
@@ -641,6 +649,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Dag Low</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>EMA20 Δ%</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Edge Score</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
                 </tr>
@@ -880,6 +889,24 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           }}>
                             {rsiZone || "—"}
                           </span>
+                        </td>
+
+                        {/* Edge Score */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                          {item.edge_score !== undefined && item.edge_score !== null ? (
+                            <span style={{
+                              fontSize: "13px",
+                              fontWeight: "700",
+                              color: item.edge_score >= 70 ? "#16a34a" : item.edge_score >= 50 ? "#f59e0b" : "#64748b",
+                              background: item.edge_score >= 70 ? "#f0fdf4" : item.edge_score >= 50 ? "#fef3c7" : "#f8fafc",
+                              padding: "4px 8px",
+                              borderRadius: "4px"
+                            }}>
+                              {item.edge_score}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>
+                          )}
                         </td>
 
                         {/* Dagar + Warning */}

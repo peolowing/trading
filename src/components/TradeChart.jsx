@@ -63,13 +63,44 @@ const Candlestick = (props) => {
   );
 };
 
+// Calculate EMA
+function calculateEMA(data, period) {
+  const k = 2 / (period + 1);
+  const emaData = [];
+
+  // Start with SMA for first value
+  let ema = data.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+  emaData.push(ema);
+
+  // Calculate EMA for remaining values
+  for (let i = period; i < data.length; i++) {
+    ema = data[i] * k + ema * (1 - k);
+    emaData.push(ema);
+  }
+
+  return emaData;
+}
+
 export default function TradeChart({ candles, entry, stop, target }) {
-  const data = candles.slice(-40).map(c => ({
+  const recentCandles = candles.slice(-40);
+
+  // Calculate EMAs from all available data, then slice
+  const allCloses = candles.map(c => c.close);
+  const ema20Full = calculateEMA(allCloses, 20);
+  const ema50Full = calculateEMA(allCloses, 50);
+
+  // Take last 40 values to match chart data
+  const ema20Recent = ema20Full.slice(-40);
+  const ema50Recent = ema50Full.slice(-40);
+
+  const data = recentCandles.map((c, i) => ({
     date: c.date,
     open: c.open,
     high: c.high,
     low: c.low,
-    close: c.close
+    close: c.close,
+    ema20: ema20Recent[i],
+    ema50: ema50Recent[i]
   }));
 
   return (

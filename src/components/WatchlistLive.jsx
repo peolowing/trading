@@ -17,6 +17,14 @@ function WatchlistLive({ onBack }) {
       const res = await fetch("/api/watchlist");
       const data = await res.json();
       const stocks = data.stocks || [];
+
+      // Debug: Log the received data
+      console.log('Watchlist API response:', data);
+      console.log('Stocks array:', stocks);
+      stocks.forEach(stock => {
+        console.log(`${stock.ticker}: edge_score=${stock.edge_score}, regime=${stock.regime}`);
+      });
+
       setWatchlist(stocks);
       await fetchLiveData(stocks);
     } catch (err) {
@@ -178,6 +186,17 @@ function WatchlistLive({ onBack }) {
                         {isPositive ? "+" : ""}{change.toFixed(2)} ({isPositive ? "+" : ""}{changePercent.toFixed(2)}%)
                       </strong>
                     </div>
+                    {stock.edge_score !== undefined && stock.edge_score !== null && (
+                      <div>
+                        <span style={{ color: "#6b7280" }}>Edge Score:</span>{" "}
+                        <strong style={{
+                          fontSize: "15px",
+                          color: stock.edge_score >= 70 ? "#16a34a" : stock.edge_score >= 50 ? "#f59e0b" : "#6b7280"
+                        }}>
+                          {stock.edge_score}
+                        </strong>
+                      </div>
+                    )}
                     <div>
                       <span style={{ color: "#6b7280" }}>Volym:</span>{" "}
                       <strong>{quote.regularMarketVolume?.toLocaleString() || "—"}</strong>
