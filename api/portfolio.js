@@ -3,7 +3,7 @@
  * Handles GET, POST, DELETE for portfolio positions
  */
 
-import { supabase } from './config/supabase.js';
+import { supabase } from '../config/supabase.js';
 
 export default async function handler(req, res) {
   const { method } = req;
