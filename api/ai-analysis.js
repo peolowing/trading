@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   try {
     const data = req.body;
     const ticker = data.ticker;
+    const forceRefresh = data.force === true;
     const today = dayjs().format('YYYY-MM-DD');
 
     if (!ticker) {
@@ -31,39 +32,82 @@ export default async function handler(req, res) {
 
     const cacheKey = `ai-${ticker}-${today}`;
 
-    // Try Supabase cache first
-    if (supabase) {
-      try {
-        const { data: cached } = await supabase
-          .from('ai_analysis')
-          .select('analysis_text')
-          .eq('ticker', ticker)
-          .eq('analysis_date', today)
-          .maybeSingle();
+    // Skip cache if force refresh is requested
+    if (!forceRefresh) {
+      // Try Supabase cache first
+      if (supabase) {
+        try {
+          const { data: cached } = await supabase
+            .from('ai_analysis')
+            .select('analysis_text')
+            .eq('ticker', ticker)
+            .eq('analysis_date', today)
+            .maybeSingle();
 
-        if (cached && cached.analysis_text) {
-          console.log(`[AI Cache HIT] ${ticker}`);
-          return res.json({ analysis: cached.analysis_text });
+          if (cached && cached.analysis_text) {
+            console.log(`[AI Cache HIT] ${ticker}`);
+            return res.json({ analysis: cached.analysis_text });
+          }
+        } catch (e) {
+          console.warn(`[AI Cache Check] ${e.message}`);
         }
-      } catch (e) {
-        console.warn(`[AI Cache Check] ${e.message}`);
+      }
+
+      // Try in-memory cache
+      const memCached = aiCache.get(cacheKey);
+      if (memCached) {
+        console.log(`[AI Memory Cache HIT] ${ticker}`);
+        return res.json({ analysis: memCached });
       }
     }
 
-    // Try in-memory cache
-    const memCached = aiCache.get(cacheKey);
-    if (memCached) {
-      console.log(`[AI Memory Cache HIT] ${ticker}`);
-      return res.json({ analysis: memCached });
-    }
-
-    console.log(`[AI Cache MISS] ${ticker} - calling OpenAI...`);
+    console.log(`[AI Cache MISS] ${ticker}${forceRefresh ? ' (forced refresh)' : ''} - calling OpenAI...`);
 
     // Generate AI analysis
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You are a disciplined weekly swing trader." },
+        {
+          role: "system",
+          content: `Du är en erfaren svensk swing trader som analyserar veckotrading-möjligheter.
+
+KRITISKT VIKTIGT:
+- Svara ENDAST på svenska
+- ALLA rubriker ska börja med ##
+- ALDRIG på engelska
+- Använd exakt denna struktur:
+
+Ge ditt svar i exakt följande format:
+
+## MARKNADSLÄGE
+[2-3 meningar om trenden, nuvarande prisnivå och om aktien är i en uppåt-, nedåt- eller sidledes trend]
+
+## TEKNISKA SIGNALER
+• **RSI:** [Nuvarande RSI-värde och vad det betyder - överköpt/översålt/neutralt]
+• **EMAs:** [Relation mellan pris, EMA20 och EMA50 - är det bullish/bearish crossover?]
+• **Volym:** [Jämför senaste volymen med genomsnittet - stigande/fallande aktivitet]
+• **Volatilitet (ATR):** [Kommentera nuvarande volatilitet och vad det betyder för risk]
+
+## STRATEGI & RESONEMANG
+[Förklara VILKEN strategi som passar bäst för nuvarande setup och VARFÖR. Diskutera om det är läge för pullback, breakout, reversal, trendföljning etc. Motivera med de tekniska signalerna.]
+
+## HANDELSBESLUT
+**Rekommendation:** [KÖP / INVÄNTA / UNDVIK]
+**Motivering:** [1-2 meningar om varför detta beslut]
+**Entry-nivå:** [Använd EXAKT värdet från data.trade.entry om det finns]
+
+## RISK & POSITIONSSTORLEK
+**Stop Loss:** [Använd EXAKT värdet från data.trade.stop om det finns - ange även i SEK med valutan]
+**Target:** [Använd EXAKT värdet från data.trade.target om det finns - ange även i SEK med valutan]
+**Risk/Reward:** [Använd EXAKT värdet från data.trade.rr, formaterat som 1:X.XX]
+**Position Size:** [Förslag baserat på data.trade.atr och risk - t.ex. "Med 2% kontorisk och stop på X SEK motsvarar detta Y aktier"]
+
+## BACKTEST-INSIKTER
+[2-3 meningar om vad backtestet visar - vinstprocent, genomsnittlig vinst/förlust, antal signaler]
+
+## SAMMANFATTNING
+[1-2 meningar med tydlig konklusion - finns setup eller inte, vad är nästa steg]`
+        },
         { role: "user", content: JSON.stringify(data) }
       ]
     });
