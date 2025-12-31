@@ -52,58 +52,71 @@ function detectStrategy(indicators) {
 }
 
 function computeRanking(features, candles, bucket) {
-  let strength = 0;
-  const { ema20, ema50, ema50_slope, rsi14, relativeVolume } = features;
-  const lastClose = candles[candles.length - 1].close;
+  let score = 0;
 
-  // Trend strength (0-30 points)
-  if (ema20 > ema50 && lastClose > ema20) {
-    strength += 15;
-    if (ema50_slope > 0.002) strength += 10;
-    else if (ema50_slope > 0.001) strength += 5;
+  // 1. Liquidity (30 pts) - justerat för mid-cap
+  const last = candles.at(-1);
+  const turnoverM = (last.close * last.volume) / 1_000_000;
+  if (turnoverM > 200) score += 30;      // Large-cap
+  else if (turnoverM > 100) score += 25; // Large-cap
+  else if (turnoverM > 50) score += 20;  // Large/Mid-cap
+  else if (turnoverM > 30) score += 15;  // Mid-cap
+  else if (turnoverM > 15) score += 10;  // Mid-cap
+
+  // 2. Trend (30 pts) - ÖKA BETYDELSE från 15→18 baspoäng
+  if (features.regime === "UPTREND") {
+    score += 18; // Istället för 15
+    if (features.slope > 0.05) score += 12; // Istället för 10
+    else if (features.slope > 0) score += 6; // Istället för 5
+  } else {
+    if (features.slope < -0.05) score -= 5; // penalize strong downtrend
   }
 
-  // RSI zone (0-25 points)
-  if (rsi14 >= 40 && rsi14 <= 60) strength += 25;
-  else if (rsi14 >= 30 && rsi14 <= 70) strength += 15;
-  else if (rsi14 >= 30 && rsi14 <= 50) strength += 5;
+  // 3. Volatility (20 pts) - prefer moderate ATR/price
+  const atrPct = features.atr14 / features.close;
+  if (atrPct >= 0.02 && atrPct <= 0.05) score += 20; // sweet spot
+  else if (atrPct > 0.05) score += 10; // high volatility ok
+  else score += 5; // low volatility less interesting
 
-  // Volume (0-20 points)
-  if (relativeVolume >= 1.5) strength += 20;
-  else if (relativeVolume >= 1.2) strength += 15;
-  else if (relativeVolume >= 1.0) strength += 10;
-  else if (relativeVolume >= 0.8) strength += 5;
-
-  // Pullback setup bonus (0-15 points)
-  const distEma20Pct = ((lastClose - ema20) / ema20) * 100;
-  if (distEma20Pct >= -1 && distEma20Pct <= 2 && rsi14 >= 40 && rsi14 <= 60) {
-    strength += 15;
+  // STEG 2: Straffa Mid Cap med låg ATR
+  if (bucket === "MID_CAP" && atrPct < 0.018) {
+    score -= 10;
   }
 
-  // Bucket adjustment (0-10 points)
-  if (bucket === "LARGE_CAP") strength += 10;
-  else if (bucket === "MID_CAP") strength += 5;
+  // 4. Momentum (20 pts)
+  if (features.rsi14 >= 40 && features.rsi14 <= 60) score += 15; // neutral/bullish
+  else if (features.rsi14 > 60 && features.rsi14 <= 70) score += 10; // strong but not overbought
+  else if (features.rsi14 < 30) score += 5; // oversold = potential
 
-  return Math.min(100, strength);
+  if (features.relVol > 1.3) score += 5; // above-average volume
+
+  return Math.max(0, Math.min(100, score));
 }
 
 function computeFeatures(candles) {
   const closes = candles.map(c => c.close);
-  const ema20Result = EMA.calculate({ period: 20, values: closes });
-  const ema50Result = EMA.calculate({ period: 50, values: closes });
-  const rsi14Result = RSI.calculate({ period: 14, values: closes });
-
-  const ema20 = ema20Result[ema20Result.length - 1];
-  const ema50 = ema50Result[ema50Result.length - 1];
-  const ema50_prev = ema50Result[ema50Result.length - 2];
-  const ema50_slope = (ema50 - ema50_prev) / ema50_prev;
-  const rsi14 = rsi14Result[rsi14Result.length - 1];
-
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
   const volumes = candles.map(c => c.volume);
-  const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-  const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
 
-  return { ema20, ema50, ema50_slope, rsi14, relativeVolume };
+  const ema20 = EMA.calculate({ period: 20, values: closes }).at(-1);
+  const ema50 = EMA.calculate({ period: 50, values: closes }).at(-1);
+  const rsi14 = RSI.calculate({ period: 14, values: closes }).at(-1);
+  const atr14 = ATR.calculate({ period: 14, high: highs, low: lows, close: closes }).at(-1);
+
+  const close = closes.at(-1);
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const relVol = volumes.at(-1) / avgVol20;
+
+  const regime = ema20 > ema50 ? "UPTREND" : "DOWNTREND";
+
+  // EMA20 slope (change over last 10 days)
+  const ema20Series = EMA.calculate({ period: 20, values: closes });
+  const slope = ema20Series.length >= 10
+    ? (ema20Series.at(-1) - ema20Series.at(-10)) / ema20Series.at(-10)
+    : 0;
+
+  return { ema20, ema50, rsi14, atr14, close, relVol, regime, slope };
 }
 
 async function calculateScreenerData() {
@@ -168,21 +181,17 @@ async function calculateScreenerData() {
 
       // Calculate indicators
       const features = computeFeatures(candles);
-      const closes = candles.map(c => c.close);
+      const volumes = candles.map(c => c.volume);
       const highs = candles.map(c => c.high);
       const lows = candles.map(c => c.low);
-      const volumes = candles.map(c => c.volume);
 
-      const atr14Result = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 });
-      const lastAtr = atr14Result[atr14Result.length - 1];
-      const lastClose = closes[closes.length - 1];
       const lastVolume = volumes[volumes.length - 1];
 
-      // Determine regime
+      // Determine regime (map from UPTREND/DOWNTREND to UI format)
       let regime = "Consolidation";
-      if (features.ema20 > features.ema50 && lastClose > features.ema20) {
+      if (features.regime === "UPTREND") {
         regime = "Bullish Trend";
-      } else if (features.ema20 < features.ema50 && lastClose < features.ema20) {
+      } else if (features.regime === "DOWNTREND") {
         regime = "Bearish Trend";
       }
 
@@ -191,9 +200,9 @@ async function calculateScreenerData() {
         ema20: features.ema20,
         ema50: features.ema50,
         rsi14: features.rsi14,
-        relativeVolume: features.relativeVolume,
+        relativeVolume: features.relVol,
         regime,
-        close: lastClose,
+        close: features.close,
         high: highs[highs.length - 1],
         low: lows[lows.length - 1]
       });
@@ -202,18 +211,18 @@ async function calculateScreenerData() {
       const edgeScore = computeRanking(features, candles, stock.bucket);
 
       // Calculate turnover
-      const turnoverMSEK = (lastClose * lastVolume) / 1_000_000;
+      const turnoverMSEK = (features.close * lastVolume) / 1_000_000;
 
       // Update database
       const { error: updateError } = await supabase
         .from('screener_stocks')
         .update({
-          price: parseFloat(lastClose.toFixed(2)),
+          price: parseFloat(features.close.toFixed(2)),
           ema20: parseFloat(features.ema20.toFixed(2)),
           ema50: parseFloat(features.ema50.toFixed(2)),
           rsi: parseFloat(features.rsi14.toFixed(2)),
-          atr: parseFloat(lastAtr.toFixed(2)),
-          relative_volume: parseFloat(features.relativeVolume.toFixed(2)),
+          atr: parseFloat(features.atr14.toFixed(2)),
+          relative_volume: parseFloat(features.relVol.toFixed(2)),
           regime,
           setup,
           edge_score: edgeScore,
