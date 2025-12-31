@@ -4,7 +4,7 @@
  * Also handles /live and /update sub-routes
  */
 
-import { supabase } from '../config/supabase.js';
+import { supabase } from './config/supabase.js';
 import yahooFinance from 'yahoo-finance2';
 import dayjs from 'dayjs';
 import { EMA, RSI } from 'technicalindicators';
