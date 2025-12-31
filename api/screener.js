@@ -25,12 +25,17 @@ export default async function handler(req, res) {
       const { data: stocks, error } = await supabase
         .from('screener_stocks')
         .select('*')
-        .eq('is_active', true)
-        .order('edge_score', { ascending: false });
+        .eq('is_active', true);
 
       if (error) throw error;
 
-      const stocksWithScores = (stocks || []).map(stock => ({
+      // Sort by edge_score (desc), then ticker (asc)
+      const sortedStocks = (stocks || []).sort((a, b) => {
+        if (b.edge_score !== a.edge_score) return b.edge_score - a.edge_score;
+        return a.ticker.localeCompare(b.ticker);
+      });
+
+      const stocksWithScores = sortedStocks.map(stock => ({
         ticker: stock.ticker,
         name: stock.name,
         bucket: stock.bucket,

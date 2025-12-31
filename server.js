@@ -1151,9 +1151,15 @@ app.get("/api/screener", async (req, res) => {
     const largeCaps = candidates.filter(s => s.bucket === "LARGE_CAP");
     const midCaps = candidates.filter(s => s.bucket === "MID_CAP");
 
-    // Sortera varje bucket på edge score (högst först)
-    largeCaps.sort((a, b) => b.edgeScore - a.edgeScore);
-    midCaps.sort((a, b) => b.edgeScore - a.edgeScore);
+    // Sortera varje bucket på edge score (högst först), sedan ticker alfabetiskt
+    largeCaps.sort((a, b) => {
+      if (b.edgeScore !== a.edgeScore) return b.edgeScore - a.edgeScore;
+      return a.ticker.localeCompare(b.ticker);
+    });
+    midCaps.sort((a, b) => {
+      if (b.edgeScore !== a.edgeScore) return b.edgeScore - a.edgeScore;
+      return a.ticker.localeCompare(b.ticker);
+    });
 
     // Ta topp 20 från varje bucket
     const finalLarge = largeCaps.slice(0, 20);
