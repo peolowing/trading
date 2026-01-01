@@ -14,6 +14,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
     loadWatchlist();
@@ -666,6 +667,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
               <thead>
                 <tr style={{ borderBottom: "2px solid #e2e8f0", color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Status</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Blockering</th>
                   <th style={{ padding: "8px 12px", textAlign: "left" }}>Aktie</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Info</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
@@ -773,11 +775,18 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                       ? (turnoverMSEK / marketCapMSEK) * 100
                       : null;
 
+                    // Calculate blocking factors
+                    const emaBlocks = status !== "READY" && (emaDist > 4 || emaDist < 0);
+                    const rsiBlocks = status !== "READY" && (rsiZone === "WEAK" || rsiZone === "HOT");
+                    const edgeBlocks = status !== "READY" && item.edge_score < 70;
+                    const anyBlocks = emaBlocks || rsiBlocks || edgeBlocks;
+
                     return (
+                      <>
                       <tr
                         key={item.ticker}
                         style={{
-                          borderBottom: rowBorder,
+                          borderBottom: expandedRow === item.ticker ? "none" : rowBorder,
                           background: rowBg,
                           cursor: "pointer",
                           transition: "all 0.15s"
@@ -788,14 +797,25 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = rowBg;
                         }}
+                        onClick={() => setExpandedRow(expandedRow === item.ticker ? null : item.ticker)}
                       >
                         {/* Status Icon */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <span style={{ fontSize: "20px" }}>{statusIcon}</span>
                         </td>
 
+                        {/* Blockering */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <div style={{ display: "flex", gap: "2px", justifyContent: "center", fontSize: "14px" }}>
+                            {!anyBlocks && <span title="Inga blockeringar!">✅</span>}
+                            {emaBlocks && <span title="EMA20 Δ% blockerar (>4% eller <0%)">📏</span>}
+                            {rsiBlocks && <span title="RSI-zon blockerar (WEAK eller HOT)">🌡️</span>}
+                            {edgeBlocks && <span title="Edge Score blockerar (<70)">📊</span>}
+                          </div>
+                        </td>
+
                         {/* Aktie */}
-                        <td style={{ padding: "10px 12px" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
                             {showBreakoutAlert && (
@@ -842,7 +862,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Pris (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <span style={{ fontWeight: "600" }}>
                             {displayPrice ? displayPrice.toFixed(2) : "—"}
                           </span>
@@ -850,7 +870,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Förändring (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {livePrice ? (
                             <span style={{
                               color: isPositive ? "#16a34a" : "#dc2626",
@@ -862,22 +882,22 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Volym (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "12px" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "12px" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {volume ? volume.toLocaleString() : "—"}
                         </td>
 
                         {/* Dag High (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {dayHigh ? dayHigh.toFixed(2) : "—"}
                         </td>
 
                         {/* Dag Low (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {dayLow ? dayLow.toFixed(2) : "—"}
                         </td>
 
                         {/* EMA20 Δ% */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {emaDist !== null && emaDist !== undefined ? (
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
                               <span style={{
@@ -904,7 +924,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Edge Score */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {item.edge_score !== undefined && item.edge_score !== null ? (
                             <span style={{
                               fontSize: "13px",
@@ -924,7 +944,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* RSI-zon */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <span style={{
                             fontSize: "11px",
                             fontWeight: "600",
@@ -940,7 +960,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Omsättning (Relativ) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           {relativeTurnover !== null ? (
                             <span style={{
                               color: relativeTurnover >= 1.0 ? "#16a34a" : relativeTurnover >= 0.3 ? "#3b82f6" : "#94a3b8",
@@ -959,7 +979,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Dagar + Warning */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
                             <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
                               {item.days_in_watchlist}d
@@ -996,7 +1016,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                             {isReady && (
                               <button
                                 className="action-btn"
-                                onClick={() => onSelectStock(item.ticker)}
+                                onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}
                                 title="Öppna chart"
                                 style={{
                                   background: "#dcfce7",
@@ -1021,6 +1041,102 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           </div>
                         </td>
                       </tr>
+
+                      {/* Expanderad analys */}
+                      {expandedRow === item.ticker && (
+                        <tr key={`${item.ticker}-expanded`}>
+                          <td colSpan="15" style={{ padding: "20px", background: "#f8fafc", borderBottom: rowBorder }}>
+                            <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+                              <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                                📊 Hur nära är {item.ticker} att bli 🟢 READY?
+                              </h3>
+
+                              {/* Nuvarande parametrar */}
+                              <div style={{ marginBottom: "20px", padding: "16px", background: "white", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
+                                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "12px" }}>Nuvarande parametrar:</h4>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", fontSize: "13px" }}>
+                                  <div><strong>Status:</strong> {statusIcon} {statusLabel}</div>
+                                  <div><strong>EMA20 Δ%:</strong> <span style={{ color: ema20Color, fontWeight: "600" }}>{emaDist !== null ? `${emaDist > 0 ? '+' : ''}${emaDist.toFixed(1)}%` : "—"}</span></div>
+                                  <div><strong>RSI-zon:</strong> <span style={{ color: rsiZoneColor, fontWeight: "600" }}>{rsiZone || "—"}</span></div>
+                                  <div><strong>Edge Score:</strong> <span style={{ color: item.edge_score >= 70 ? "#16a34a" : item.edge_score >= 50 ? "#f59e0b" : "#64748b", fontWeight: "600" }}>{item.edge_score || "—"}</span></div>
+                                  <div><strong>Dagar i lista:</strong> {item.days_in_watchlist || 0}</div>
+                                </div>
+                              </div>
+
+                              {/* Vad som är BRA */}
+                              <div style={{ marginBottom: "16px", padding: "16px", background: "#f0fdf4", borderRadius: "8px", border: "1px solid #86efac" }}>
+                                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#15803d", marginBottom: "8px" }}>✅ Det som är BRA:</h4>
+                                <div style={{ fontSize: "13px", color: "#166534" }}>
+                                  {!emaBlocks && <div>• <strong>EMA20 Δ% = {emaDist?.toFixed(1)}%</strong> - {Math.abs(emaDist) <= 1.5 ? "Perfekt i READY-zonen!" : emaDist <= 2 ? "Inom READY-zonen (0-2%)" : emaDist <= 4 ? "Närmar sig (2-4%)" : "OK"}</div>}
+                                  {!edgeBlocks && <div>• <strong>Edge Score = {item.edge_score}</strong> - {item.edge_score >= 70 ? "Stark statistisk kvalitet!" : "OK kvalitet"}</div>}
+                                  {!rsiBlocks && <div>• <strong>RSI-zon = {rsiZone}</strong> - {rsiZone === "CALM" ? "Perfekt momentum!" : "Acceptabelt momentum"}</div>}
+                                  {!anyBlocks && <div>• <strong>Inga blockeringar!</strong> Alla parametrar är inom gröna zonen ✅</div>}
+                                </div>
+                              </div>
+
+                              {/* Vad som BLOCKERAR */}
+                              {anyBlocks && (
+                                <div style={{ marginBottom: "16px", padding: "16px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
+                                  <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#991b1b", marginBottom: "8px" }}>⚠️ Det som BLOCKERAR 🟢:</h4>
+                                  <div style={{ fontSize: "13px", color: "#991b1b" }}>
+                                    {emaBlocks && (
+                                      <div style={{ marginBottom: "8px" }}>
+                                        • <strong>📏 EMA20 Δ% = {emaDist?.toFixed(1)}%</strong> -
+                                        {emaDist > 4 ? ` För långt från pullback-zonen (behöver komma under 2%)` :
+                                         emaDist < 0 ? ` Under EMA20 (pullback för djup, behöver stänga över EMA20)` :
+                                         ` Blockerar av okänd anledning`}
+                                      </div>
+                                    )}
+                                    {rsiBlocks && (
+                                      <div style={{ marginBottom: "8px" }}>
+                                        • <strong>🌡️ RSI-zon = {rsiZone}</strong> -
+                                        {rsiZone === "WEAK" ? ` För svagt momentum (behöver stärkas till CALM eller WARM)` :
+                                         rsiZone === "HOT" ? ` För starkt momentum (behöver svalna till CALM, RSI 40-55)` :
+                                         ` Momentum ej optimalt`}
+                                      </div>
+                                    )}
+                                    {edgeBlocks && (
+                                      <div style={{ marginBottom: "8px" }}>
+                                        • <strong>📊 Edge Score = {item.edge_score}</strong> - Under optimal tröskel (behöver ≥70 för högsta kvalitet)
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Bedömning */}
+                              <div style={{ padding: "16px", background: "#eff6ff", borderRadius: "8px", border: "1px solid #93c5fd" }}>
+                                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#1e40af", marginBottom: "8px" }}>💡 Bedömning:</h4>
+                                <div style={{ fontSize: "13px", color: "#1e40af" }}>
+                                  {!anyBlocks ? (
+                                    <div><strong>PERFEKT!</strong> Alla förutsättningar är uppfyllda för köp. ✅</div>
+                                  ) : (
+                                    <>
+                                      <div style={{ marginBottom: "8px" }}>
+                                        <strong>{item.ticker} är {
+                                          (emaBlocks && rsiBlocks && edgeBlocks) ? "långt från" :
+                                          (emaBlocks && rsiBlocks) || (emaBlocks && edgeBlocks) || (rsiBlocks && edgeBlocks) ? "en bit från" :
+                                          "MYCKET nära"
+                                        } att bli grön!</strong>
+                                      </div>
+                                      {!emaBlocks && !edgeBlocks && rsiBlocks && (
+                                        <div>Endast RSI blockerar - allt annat är perfekt! Om {rsiZone === "HOT" ? "priset konsoliderar" : "momentum stärks"} kan detta bli grönt inom 1-3 dagar.</div>
+                                      )}
+                                      {emaBlocks && !rsiBlocks && (
+                                        <div>EMA20 Δ% blockerar - vänta på att priset {emaDist > 4 ? "gör pullback mot EMA20" : "stiger över EMA20"}.</div>
+                                      )}
+                                      {edgeBlocks && !emaBlocks && !rsiBlocks && (
+                                        <div>Timing är perfekt men Edge Score är under 70. Detta är fortfarande handelbart men med något lägre statistisk kvalitet.</div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </>
                     );
                   })
                 }
@@ -1134,7 +1250,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
                         onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                        onClick={() => onSelectStock(item.ticker)}
+                        onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}
                       >
                         <td style={{ padding: "10px 12px", color: "#94a3b8", fontWeight: "500" }}>
                           {idx + 1}
