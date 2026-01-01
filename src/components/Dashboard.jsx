@@ -780,6 +780,9 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     const edgeBlocks = status !== "READY" && item.edge_score < 70;
                     const anyBlocks = emaBlocks || rsiBlocks || edgeBlocks;
 
+                    // Check if we have complete data (required for valid buy signal)
+                    const hasCompleteData = emaDist !== null && emaDist !== undefined && rsiZone !== null && rsiZone !== undefined;
+
                     return (
                       <>
                       <tr
@@ -980,27 +983,44 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         {/* Action Buttons */}
                         <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
-                            <button
-                              className="action-btn"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const enrichedStock = await prepareStockForEntry(item);
-                                setSelectedStock(enrichedStock);
-                                setShowEntryModal(true);
-                              }}
-                              title={isReady ? "Lägg till i portfolio" : "Lägg till i portfolio (diskretionär entry)"}
-                              style={{
-                                background: isReady ? "#16a34a" : "#3b82f6",
-                                border: isReady ? "1px solid #15803d" : "1px solid #2563eb",
-                                color: "white",
-                                fontSize: "12px",
-                                fontWeight: "600",
-                                padding: "4px 10px"
-                              }}
-                            >
-                              KÖP
-                            </button>
-                            {isReady && (
+                            {hasCompleteData ? (
+                              <button
+                                className="action-btn"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const enrichedStock = await prepareStockForEntry(item);
+                                  setSelectedStock(enrichedStock);
+                                  setShowEntryModal(true);
+                                }}
+                                title={isReady ? "Lägg till i portfolio" : "Lägg till i portfolio (diskretionär entry)"}
+                                style={{
+                                  background: isReady ? "#16a34a" : "#3b82f6",
+                                  border: isReady ? "1px solid #15803d" : "1px solid #2563eb",
+                                  color: "white",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  padding: "4px 10px"
+                                }}
+                              >
+                                KÖP
+                              </button>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  color: "#dc2626",
+                                  fontWeight: "600",
+                                  padding: "4px 8px",
+                                  background: "#fef2f2",
+                                  borderRadius: "4px",
+                                  border: "1px solid #fecaca"
+                                }}
+                                title="Ofullständig data - EMA20 Δ% eller RSI-zon saknas"
+                              >
+                                ⚠ Data saknas
+                              </span>
+                            )}
+                            {isReady && hasCompleteData && (
                               <button
                                 className="action-btn"
                                 onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}
