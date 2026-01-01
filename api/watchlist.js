@@ -79,6 +79,16 @@ export default async function handler(req, res) {
 
       const updates = [];
 
+      // Fetch edge scores for all watchlist tickers
+      const tickers = watchlistStocks.map(s => s.ticker);
+      const { data: screenerData } = await supabase
+        .from('screener_stocks')
+        .select('ticker, edge_score')
+        .in('ticker', tickers);
+
+      const edgeScoreMap = new Map();
+      screenerData?.forEach(s => edgeScoreMap.set(s.ticker, s.edge_score));
+
       for (const stock of watchlistStocks) {
         try {
           const ticker = stock.ticker;
@@ -108,29 +118,32 @@ export default async function handler(req, res) {
           const closes = candles.map(c => c.close);
           const highs = candles.map(c => c.high);
           const lows = candles.map(c => c.low);
+          const volumes = candles.map(c => c.volume);
 
           const ema20 = EMA.calculate({ period: 20, values: closes });
           const ema50 = EMA.calculate({ period: 50, values: closes });
           const rsi14 = RSI.calculate({ period: 14, values: closes });
-          const lastPrice = candles[candles.length - 1].close;
-          const lastEma20 = ema20[ema20.length - 1];
-          const lastEma50 = ema50[ema50.length - 1];
-          const lastRsi = rsi14[rsi14.length - 1];
+
+          // Calculate relative volume
+          const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+          const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
 
           // Calculate days in watchlist
           const addedDate = dayjs(stock.added_at);
           const daysInWatchlist = dayjs().diff(addedDate, 'day');
 
+          // Get edge score
+          const edge_score = edgeScoreMap.get(ticker);
+
           // Build input for status update
-          const input = buildWatchlistInput({
+          const input = buildWatchlistInput(
             ticker,
             candles,
-            ema20,
-            ema50,
-            rsi14,
-            prevStatus: stock.current_status,
-            daysInWatchlist
-          });
+            { ema20, ema50, rsi14, relativeVolume },
+            stock.current_status,
+            stock.added_at,
+            edge_score
+          );
 
           const result = updateWatchlistStatus(input);
 

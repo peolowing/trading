@@ -36,6 +36,19 @@ export function calculateEma50Slope(ema50Series) {
 }
 
 /**
+ * Beräkna EMA20 slope (lutning)
+ * @param {Array} ema20Series - Array av EMA20-värden (sista 5-10 dagar)
+ */
+export function calculateEma20Slope(ema20Series) {
+  if (ema20Series.length < 2) return 0;
+
+  const current = ema20Series[ema20Series.length - 1];
+  const previous = ema20Series[ema20Series.length - 2];
+
+  return ((current - previous) / previous);
+}
+
+/**
  * Detektera högre låg (higher low) - förenklad version
  * @param {Array} candles - Senaste 5-10 candles
  */
@@ -59,9 +72,10 @@ export function hasHigherLow(candles) {
  * {
  *   ticker: "VOLV-B.ST",
  *   price: { close, high, low },
- *   indicators: { ema20, ema50, ema50_slope, rsi14 },
+ *   indicators: { ema20, ema50, ema20_slope, ema50_slope, rsi14 },
  *   volume: { relVol },
  *   structure: { higherLow },
+ *   edge_score: 75,
  *   prevStatus: "APPROACHING",
  *   daysInWatchlist: 6
  * }
@@ -72,26 +86,30 @@ export function updateWatchlistStatus(input) {
     indicators,
     volume,
     structure,
+    edge_score,
     prevStatus,
     daysInWatchlist
   } = input;
 
   const { close } = price;
-  const { ema20, ema50, ema50_slope, rsi14 } = indicators;
+  const { ema20, ema50, ema20_slope, ema50_slope, rsi14 } = indicators;
 
   // ─────────────────────────
   // 1. TRENDENS HÄLSA (hård invalidering)
   // ─────────────────────────
+  // KRITISK FÖRBÄTTRING #3: Kräv pris > EMA20 > EMA50 och positiv EMA20-slope
   const trendOk =
-    close > ema50 &&
+    close > ema20 &&
+    ema20 > ema50 &&
     ema50_slope > 0 &&
+    ema20_slope > 0 &&
     structure.higherLow === true;
 
   if (!trendOk) {
     return {
       status: "INVALIDATED",
       action: "REMOVE_FROM_WATCHLIST",
-      reason: "Trend bruten (pris under EMA50 eller negativ slope eller lägre låg)",
+      reason: "Trend bruten (kräver pris > EMA20 > EMA50, positiva slopes och högre låg)",
       diagnostics: {
         distEma20Pct: ema20DistancePct(close, ema20).toFixed(2),
         rsiZone: rsiZone(rsi14),
@@ -144,10 +162,17 @@ export function updateWatchlistStatus(input) {
     reason = "Drar sig mot pullback (" + distEma20.toFixed(1) + "%)";
   }
 
+  // KRITISK FÖRBÄTTRING #2: Kräv relVol > 1.0 för READY
   if (proximity === "NEAR" && momentum === "CALM") {
-    status = "READY";
-    action = "PREPARE_ENTRY";
-    reason = "Pullback nära + lugnt momentum (RSI " + rsi14.toFixed(0) + ")";
+    if (volume.relVol >= 1.0) {
+      status = "READY";
+      action = "PREPARE_ENTRY";
+      reason = "Pullback nära + lugnt momentum + volym OK (RSI " + rsi14.toFixed(0) + ", vol " + volume.relVol.toFixed(2) + "x)";
+    } else {
+      status = "APPROACHING";
+      action = "WAIT";
+      reason = "Pullback nära men för låg volym (" + volume.relVol.toFixed(2) + "x, kräver ≥1.0x)";
+    }
   }
 
   if (momentum === "HOT") {
@@ -164,11 +189,11 @@ export function updateWatchlistStatus(input) {
       : "Momentum för svagt (RSI " + rsi14.toFixed(0) + ")";
   }
 
-  // Special case: Om momentum är CALM och vi är NEAR, men volymen är extremt låg
-  if (status === "READY" && volumeState === "LOW") {
+  // KRITISK FÖRBÄTTRING #1: Edge-filter - kräv edge_score ≥ 70 för READY
+  if (status === "READY" && edge_score !== undefined && edge_score < 70) {
     status = "APPROACHING";
     action = "WAIT";
-    reason = "Pullback nära men låg volym - vänta på bekräftelse";
+    reason = "Tekniskt setup OK men edge för svag (" + edge_score.toFixed(0) + "%, kräver ≥70%)";
   }
 
   // ─────────────────────────
@@ -195,9 +220,10 @@ export function updateWatchlistStatus(input) {
 /**
  * Hjälpfunktion: Bygg input-objekt från candles och indicators
  */
-export function buildWatchlistInput(ticker, candles, indicators, prevStatus = null, addedAt = null) {
+export function buildWatchlistInput(ticker, candles, indicators, prevStatus = null, addedAt = null, edge_score = undefined) {
   const lastCandle = candles[candles.length - 1];
   const ema50Series = indicators.ema50.slice(-5).filter(v => v !== null);
+  const ema20Series = indicators.ema20.slice(-5).filter(v => v !== null);
 
   const daysInWatchlist = addedAt
     ? Math.floor((new Date() - new Date(addedAt)) / (1000 * 60 * 60 * 24))
@@ -213,6 +239,7 @@ export function buildWatchlistInput(ticker, candles, indicators, prevStatus = nu
     indicators: {
       ema20: indicators.ema20[indicators.ema20.length - 1],
       ema50: indicators.ema50[indicators.ema50.length - 1],
+      ema20_slope: calculateEma20Slope(ema20Series),
       ema50_slope: calculateEma50Slope(ema50Series),
       rsi14: indicators.rsi14[indicators.rsi14.length - 1]
     },
@@ -222,6 +249,7 @@ export function buildWatchlistInput(ticker, candles, indicators, prevStatus = nu
     structure: {
       higherLow: hasHigherLow(candles.slice(-10))
     },
+    edge_score,
     prevStatus,
     daysInWatchlist
   };
