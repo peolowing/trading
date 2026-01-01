@@ -23,29 +23,60 @@ export function ema20DistancePct(close, ema20) {
 }
 
 /**
- * Beräkna EMA50 slope (lutning)
- * @param {Array} ema50Series - Array av EMA50-värden (sista 5-10 dagar)
+ * FAS 1 FIX #2: Beräkna EMA50 slope (lutning) över 5 dagar
+ * Mindre bruskänslig än 1-dags slope
+ * @param {Array} ema50Series - Array av EMA50-värden (minst 6 dagar)
  */
 export function calculateEma50Slope(ema50Series) {
-  if (ema50Series.length < 2) return 0;
+  if (ema50Series.length < 6) return 0;
 
   const current = ema50Series[ema50Series.length - 1];
-  const previous = ema50Series[ema50Series.length - 2];
+  const previous5 = ema50Series[ema50Series.length - 6];
 
-  return ((current - previous) / previous);
+  return ((current - previous5) / previous5);
 }
 
 /**
- * Beräkna EMA20 slope (lutning)
- * @param {Array} ema20Series - Array av EMA20-värden (sista 5-10 dagar)
+ * FAS 1 FIX #2: Beräkna EMA20 slope (lutning) över 5 dagar
+ * Mindre bruskänslig än 1-dags slope
+ * @param {Array} ema20Series - Array av EMA20-värden (minst 6 dagar)
  */
 export function calculateEma20Slope(ema20Series) {
-  if (ema20Series.length < 2) return 0;
+  if (ema20Series.length < 6) return 0;
 
   const current = ema20Series[ema20Series.length - 1];
-  const previous = ema20Series[ema20Series.length - 2];
+  const previous5 = ema20Series[ema20Series.length - 6];
 
-  return ((current - previous) / previous);
+  return ((current - previous5) / previous5);
+}
+
+/**
+ * FAS 1 FIX #1: Beräkna confidence-adjusted edge score
+ * Minskar edge_score vid låg sample size för att undvika överoptimism
+ * @param {number} edge_score - Raw edge score från backtest
+ * @param {number} totalTrades - Antal trades i backtestet
+ * @returns {number} Justerad edge score
+ */
+export function adjustedEdgeScore(edge_score, totalTrades) {
+  if (!edge_score || !totalTrades) return 0;
+
+  // Confidence factor: sqrt(min(totalTrades/50, 1))
+  // Vid 50+ trades = full confidence (factor = 1.0)
+  // Vid 25 trades = factor ≈ 0.71
+  // Vid 10 trades = factor ≈ 0.45
+  const confidenceFactor = Math.sqrt(Math.min(totalTrades / 50, 1));
+
+  return edge_score * confidenceFactor;
+}
+
+/**
+ * FAS 1 FIX #3: Kontrollera om aktien uppfyller likviditetskrav
+ * @param {number} avgTurnover - Genomsnittlig dagsomsättning i SEK
+ * @param {number} minTurnover - Minimum dagsomsättning (default 5M SEK)
+ * @returns {boolean} true om likviditeten är OK
+ */
+export function hasAdequateLiquidity(avgTurnover, minTurnover = 5000000) {
+  return avgTurnover >= minTurnover;
 }
 
 /**
@@ -70,9 +101,10 @@ export function hasHigherLow(candles) {
  *   ticker: "VOLV-B.ST",
  *   price: { close, high, low },
  *   indicators: { ema20, ema50, ema20_slope, ema50_slope, rsi14 },
- *   volume: { relVol },
+ *   volume: { relVol, avgTurnover },
  *   structure: { higherLow },
  *   edge_score: 75,
+ *   totalTrades: 45,
  *   prevStatus: "APPROACHING",
  *   lastInvalidatedDate: "2025-01-01",
  *   daysInWatchlist: 6
@@ -85,6 +117,7 @@ export function updateWatchlistStatus(input) {
     volume,
     structure,
     edge_score,
+    totalTrades,
     prevStatus,
     lastInvalidatedDate,
     daysInWatchlist
@@ -92,6 +125,24 @@ export function updateWatchlistStatus(input) {
 
   const { close } = price;
   const { ema20, ema50, ema20_slope, ema50_slope, rsi14 } = indicators;
+
+  // ─────────────────────────
+  // FAS 1 FIX #3: LIKVIDITETSFILTER (hård invalidering)
+  // ─────────────────────────
+  if (volume.avgTurnover !== undefined && !hasAdequateLiquidity(volume.avgTurnover)) {
+    return {
+      status: "INVALIDATED",
+      action: "REMOVE_FROM_WATCHLIST",
+      reason: "Otillräcklig likviditet (kräver genomsnittlig omsättning ≥5M SEK, aktuell: " + (volume.avgTurnover / 1000000).toFixed(1) + "M SEK)",
+      lastInvalidatedDate: new Date().toISOString().split('T')[0],
+      diagnostics: {
+        distEma20Pct: ema20DistancePct(close, ema20).toFixed(2),
+        rsiZone: rsiZone(rsi14),
+        volumeState: volume.relVol > 1.5 ? "HIGH" : volume.relVol < 0.5 ? "LOW" : "NORMAL"
+      },
+      timeWarning: null
+    };
+  }
 
   // ─────────────────────────
   // 1. TRENDENS HÄLSA (hård invalidering)
@@ -211,11 +262,30 @@ export function updateWatchlistStatus(input) {
       : "Momentum för svagt (RSI " + rsi14.toFixed(0) + ")";
   }
 
-  // KRITISK FÖRBÄTTRING #1: Edge-filter - kräv edge_score ≥ 70 för READY och BREAKOUT_READY
-  if ((status === "READY" || status === "BREAKOUT_READY") && edge_score !== undefined && edge_score < 70) {
-    status = "APPROACHING";
-    action = "WAIT";
-    reason = "Tekniskt setup OK men edge för svag (" + edge_score.toFixed(0) + "%, kräver ≥70%)";
+  // FAS 1 FIX #1: ROBUSTHET EDGE-FILTER
+  // Kräv minTrades ≥ 30 OCH använd confidence-adjusted edge score
+  if (status === "READY" || status === "BREAKOUT_READY") {
+    // Kräv minst 30 trades i backtestet
+    if (totalTrades !== undefined && totalTrades < 30) {
+      status = "APPROACHING";
+      action = "WAIT";
+      reason = "Tekniskt setup OK men för få backtest-trades (" + totalTrades + " st, kräver ≥30 för tillförlitlighet)";
+    }
+    // Använd confidence-adjusted edge score
+    else if (edge_score !== undefined && totalTrades !== undefined) {
+      const adjEdge = adjustedEdgeScore(edge_score, totalTrades);
+      if (adjEdge < 70) {
+        status = "APPROACHING";
+        action = "WAIT";
+        reason = "Tekniskt setup OK men edge för svag (justerad edge: " + adjEdge.toFixed(0) + "%, raw: " + edge_score.toFixed(0) + "%, " + totalTrades + " trades, kräver ≥70%)";
+      }
+    }
+    // Fallback: gammal logik om totalTrades saknas
+    else if (edge_score !== undefined && edge_score < 70) {
+      status = "APPROACHING";
+      action = "WAIT";
+      reason = "Tekniskt setup OK men edge för svag (" + edge_score.toFixed(0) + "%, kräver ≥70%)";
+    }
   }
 
   // FÖRBÄTTRING #5: Cooldown efter INVALIDATED - kräv 3 dagar för READY, 1 dag för BREAKOUT
@@ -271,11 +341,14 @@ export function updateWatchlistStatus(input) {
 
 /**
  * Hjälpfunktion: Bygg input-objekt från candles och indicators
+ * FAS 1: Uppdaterad för att stödja 5-dagars slope och nya filter
  */
-export function buildWatchlistInput(ticker, candles, indicators, prevStatus = null, addedAt = null, edge_score = undefined, lastInvalidatedDate = null) {
+export function buildWatchlistInput(ticker, candles, indicators, prevStatus = null, addedAt = null, edge_score = undefined, lastInvalidatedDate = null, totalTrades = undefined, avgTurnover = undefined) {
   const lastCandle = candles[candles.length - 1];
-  const ema50Series = indicators.ema50.slice(-5).filter(v => v !== null);
-  const ema20Series = indicators.ema20.slice(-5).filter(v => v !== null);
+
+  // FAS 1 FIX #2: Behöver 6 dagar för 5-dagars slope
+  const ema50Series = indicators.ema50.slice(-6).filter(v => v !== null);
+  const ema20Series = indicators.ema20.slice(-6).filter(v => v !== null);
 
   const daysInWatchlist = addedAt
     ? Math.floor((new Date() - new Date(addedAt)) / (1000 * 60 * 60 * 24))
@@ -296,12 +369,14 @@ export function buildWatchlistInput(ticker, candles, indicators, prevStatus = nu
       rsi14: indicators.rsi14[indicators.rsi14.length - 1]
     },
     volume: {
-      relVol: indicators.relativeVolume
+      relVol: indicators.relativeVolume,
+      avgTurnover: avgTurnover  // FAS 1 FIX #3: Likviditetsdata
     },
     structure: {
       higherLow: hasHigherLow(candles.slice(-10))
     },
     edge_score,
+    totalTrades,  // FAS 1 FIX #1: Sample size för confidence adjustment
     prevStatus,
     lastInvalidatedDate,
     daysInWatchlist

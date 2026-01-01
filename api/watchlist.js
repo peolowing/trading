@@ -79,15 +79,21 @@ export default async function handler(req, res) {
 
       const updates = [];
 
-      // Fetch edge scores for all watchlist tickers
+      // FAS 1: Fetch edge scores, totalTrades och avgTurnover för alla watchlist tickers
       const tickers = watchlistStocks.map(s => s.ticker);
       const { data: screenerData } = await supabase
         .from('screener_stocks')
-        .select('ticker, edge_score')
+        .select('ticker, edge_score, total_trades, avg_turnover')
         .in('ticker', tickers);
 
       const edgeScoreMap = new Map();
-      screenerData?.forEach(s => edgeScoreMap.set(s.ticker, s.edge_score));
+      const totalTradesMap = new Map();
+      const avgTurnoverMap = new Map();
+      screenerData?.forEach(s => {
+        edgeScoreMap.set(s.ticker, s.edge_score);
+        totalTradesMap.set(s.ticker, s.total_trades);
+        avgTurnoverMap.set(s.ticker, s.avg_turnover);
+      });
 
       for (const stock of watchlistStocks) {
         try {
@@ -132,8 +138,10 @@ export default async function handler(req, res) {
           const addedDate = dayjs(stock.added_at);
           const daysInWatchlist = dayjs().diff(addedDate, 'day');
 
-          // Get edge score
+          // FAS 1: Hämta edge_score, totalTrades och avgTurnover
           const edge_score = edgeScoreMap.get(ticker);
+          const totalTrades = totalTradesMap.get(ticker);
+          const avgTurnover = avgTurnoverMap.get(ticker);
 
           // Build input for status update
           const input = buildWatchlistInput(
@@ -143,7 +151,9 @@ export default async function handler(req, res) {
             stock.current_status,
             stock.added_at,
             edge_score,
-            stock.last_invalidated_date
+            stock.last_invalidated_date,
+            totalTrades,
+            avgTurnover
           );
 
           const result = updateWatchlistStatus(input);
