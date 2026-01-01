@@ -679,6 +679,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Edge Score</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms. %</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
                 </tr>
               </thead>
@@ -774,12 +775,9 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                       ? (turnoverMSEK / marketCapMSEK) * 100
                       : null;
 
-                    // Check if we have complete data (required for valid status)
-                    const hasCompleteData = emaDist !== null && emaDist !== undefined && rsiZone !== null && rsiZone !== undefined;
-
                     // Calculate blocking factors
-                    const emaBlocks = !hasCompleteData || (status !== "READY" && (emaDist > 4 || emaDist < 0));
-                    const rsiBlocks = !hasCompleteData || (status !== "READY" && (rsiZone === "WEAK" || rsiZone === "HOT"));
+                    const emaBlocks = status !== "READY" && (emaDist > 4 || emaDist < 0);
+                    const rsiBlocks = status !== "READY" && (rsiZone === "WEAK" || rsiZone === "HOT");
                     const edgeBlocks = status !== "READY" && item.edge_score < 70;
                     const anyBlocks = emaBlocks || rsiBlocks || edgeBlocks;
 
@@ -864,7 +862,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Pris (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           <span style={{ fontWeight: "600" }}>
                             {displayPrice ? displayPrice.toFixed(2) : "—"}
                           </span>
@@ -872,7 +870,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Förändring (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {livePrice ? (
                             <span style={{
                               color: isPositive ? "#16a34a" : "#dc2626",
@@ -884,22 +882,22 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Volym (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "12px" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "12px" }} onClick={() => onSelectStock(item.ticker)}>
                           {volume ? volume.toLocaleString() : "—"}
                         </td>
 
                         {/* Dag High (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {dayHigh ? dayHigh.toFixed(2) : "—"}
                         </td>
 
                         {/* Dag Low (Live) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {dayLow ? dayLow.toFixed(2) : "—"}
                         </td>
 
                         {/* EMA20 Δ% */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
                           {emaDist !== null && emaDist !== undefined ? (
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
                               <span style={{
@@ -926,7 +924,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Edge Score */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
                           {item.edge_score !== undefined && item.edge_score !== null ? (
                             <span style={{
                               fontSize: "13px",
@@ -946,7 +944,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* RSI-zon */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
                           <span style={{
                             fontSize: "11px",
                             fontWeight: "600",
@@ -962,7 +960,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         </td>
 
                         {/* Omsättning (Relativ) */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {relativeTurnover !== null ? (
                             <span style={{
                               color: relativeTurnover >= 1.0 ? "#16a34a" : relativeTurnover >= 0.3 ? "#3b82f6" : "#94a3b8",
@@ -978,6 +976,18 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                               {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}M` : "—"}
                             </span>
                           )}
+                        </td>
+
+                        {/* Dagar + Warning */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
+                              {item.days_in_watchlist}d
+                            </span>
+                            {showWarning && (
+                              <span style={{ fontSize: "14px", color: "#f59e0b" }} title={item.time_warning || "Lång väntan"}>⚠︎</span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Action Buttons */}
@@ -1006,7 +1016,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                             {isReady && (
                               <button
                                 className="action-btn"
-                                onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}
+                                onClick={() => onSelectStock(item.ticker)}
                                 title="Öppna chart"
                                 style={{
                                   background: "#dcfce7",
@@ -1035,7 +1045,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                       {/* Expanderad analys */}
                       {expandedRow === item.ticker && (
                         <tr key={`${item.ticker}-expanded`}>
-                          <td colSpan="14" style={{ padding: "20px", background: "#f8fafc", borderBottom: rowBorder }}>
+                          <td colSpan="15" style={{ padding: "20px", background: "#f8fafc", borderBottom: rowBorder }}>
                             <div style={{ maxWidth: "900px", margin: "0 auto" }}>
                               <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
                                 📊 Hur nära är {item.ticker} att bli 🟢 READY?
@@ -1240,7 +1250,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
                         onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                        onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}
+                        onClick={() => onSelectStock(item.ticker)}
                       >
                         <td style={{ padding: "10px 12px", color: "#94a3b8", fontWeight: "500" }}>
                           {idx + 1}
@@ -1622,13 +1632,11 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <p style={{ marginBottom: "12px" }}>Status är <strong>inte manuell</strong> – den beräknas automatiskt från flera tekniska faktorer:</p>
 
                   <div style={{ marginBottom: "12px" }}>
-                    <strong>Steg 1: Trend-check (SKÄRPT 🔥)</strong><br/>
+                    <strong>Steg 1: Trend-check (hård invalidering)</strong><br/>
                     Om <em>någon</em> är sann → 🔴 INVALIDATED:<br/>
-                    • Pris &lt; EMA20 <em>(nytt krav!)</em><br/>
-                    • EMA20 &lt; EMA50<br/>
-                    • EMA50 slope ≤ 0 (trenden pekar nedåt)<br/>
-                    • EMA20 slope ≤ 0 <em>(nytt krav!)</em><br/>
-                    • Inga 3 stigande lows i rad <em>(skärpt!)</em>
+                    • Pris &lt; EMA50<br/>
+                    • EMA50 slope &lt; 0 (trenden pekar nedåt)<br/>
+                    • Ingen "higher low" (strukturen bruten)
                   </div>
 
                   <div style={{ marginBottom: "12px" }}>
@@ -1636,28 +1644,16 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     <code style={{ background: "#fef3c7", padding: "2px 6px", borderRadius: "3px" }}>distEma20 = ((pris - ema20) / ema20) × 100</code><br/>
                     • FAR: &gt;4%<br/>
                     • APPROACHING: 2-4%<br/>
-                    • NEAR: 1-2% (ovanför EMA20)<br/>
-                    • <strong>🎯 PERFECT</strong>: 0-1% <em>(sweet spot!)</em><br/>
+                    • NEAR: 0-2% (ovanför EMA20)<br/>
                     • TOO_DEEP: &lt;0% (under EMA20)
                   </div>
 
                   <div style={{ marginBottom: "12px" }}>
-                    <strong>Steg 3: Statusmaskin (med 3 kritiska filter!)</strong><br/>
-                    • <strong>🟢 READY</strong> = (PERFECT 0-1% eller NEAR 1-2%) + RSI 40-55 + <strong>Volym ≥1.0x</strong> + <strong>Edge ≥70%</strong> + <em>cooldown OK</em><br/>
-                    • <strong>🔴 BREAKOUT_READY</strong> = RSI &gt;65 + Pris &gt; EMA20 + <strong>Volym ≥1.2x</strong><br/>
-                    • <strong>🟡 APPROACHING</strong> = APPROACHING (2-4%) eller blockeras av edge/volym/cooldown<br/>
-                    • <strong>🟠 BREAKOUT_ONLY</strong> = RSI &gt;65 men saknar volym/pris-krav<br/>
-                    • <strong>🔵 WAIT_PULLBACK</strong> = FAR (&gt;4%) eller TOO_DEEP eller RSI &lt;40<br/>
-                    • <strong>⏰ EXPIRED</strong> = &gt;15 dagar utan setup → auto-borttagen
-                  </div>
-
-                  <div style={{ background: "#fef3c7", padding: "8px 12px", borderRadius: "6px", marginBottom: "12px" }}>
-                    <strong>🔥 NYA KRITISKA FILTER:</strong><br/>
-                    <strong>Filter #1 - Edge:</strong> Kräver ≥70% edge_score för READY<br/>
-                    <strong>Filter #2 - Volym:</strong> Kräver ≥1.0x relativ volym för READY (var 0.5x)<br/>
-                    <strong>Filter #3 - Trend:</strong> Kräver pris &gt; EMA20 &gt; EMA50 + båda slopes positiva<br/>
-                    <strong>Cooldown:</strong> Efter INVALIDATED krävs 3 dagars återhämtning<br/>
-                    <strong>Auto-remove:</strong> Städar bort aktier som inte gett setup på 15 dagar
+                    <strong>Steg 3: Statusmaskin</strong><br/>
+                    • <strong>🟢 READY</strong> = NEAR (0-2%) + RSI 40-55 (CALM) + OK volym<br/>
+                    • <strong>🟡 APPROACHING</strong> = APPROACHING (2-4%)<br/>
+                    • <strong>🟠 BREAKOUT_ONLY</strong> = RSI &gt;65 (för starkt momentum)<br/>
+                    • <strong>🔵 WAIT_PULLBACK</strong> = FAR (&gt;4%) eller TOO_DEEP eller RSI &lt;40
                   </div>
 
                   <p style={{ fontSize: "12px", fontStyle: "italic", color: "#92400e" }}>

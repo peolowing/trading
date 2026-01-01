@@ -1628,6 +1628,7 @@ app.get("/api/watchlist/live", async (req, res) => {
             currency: quote.currency,
             longName: quote.longName,
             shortName: quote.shortName,
+            marketCap: quote.marketCap,
           };
         } catch (e) {
           console.warn(`Failed to fetch quote for ${ticker}:`, e.message);
