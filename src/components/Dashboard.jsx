@@ -749,6 +749,15 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     // Warning icon for long waiting
                     const showWarning = item.days_in_watchlist > 10 && status !== 'READY';
 
+                    // Check if data is stale (last_updated > 1 day ago)
+                    const lastUpdated = item.last_updated ? new Date(item.last_updated) : null;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const daysSinceUpdate = lastUpdated
+                      ? Math.floor((today - new Date(lastUpdated.setHours(0, 0, 0, 0))) / (1000 * 60 * 60 * 24))
+                      : 999;
+                    const isStaleData = daysSinceUpdate > 1;
+
                     // Live data from Yahoo Finance
                     const quote = liveData[item.ticker] || {};
                     const livePrice = quote.regularMarketPrice;
@@ -803,7 +812,21 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                       >
                         {/* Status Icon */}
                         <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
-                          <span style={{ fontSize: "20px" }}>{statusIcon}</span>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                            <span style={{ fontSize: "20px" }}>{statusIcon}</span>
+                            {isStaleData && (
+                              <span
+                                style={{
+                                  fontSize: "14px",
+                                  opacity: 0.7,
+                                  cursor: "help"
+                                }}
+                                title={`Gammal data: Senast uppdaterad ${item.last_updated} (${daysSinceUpdate} dagar sedan). Status kan vara inaktuell.`}
+                              >
+                                ⚠️
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Blockering */}
