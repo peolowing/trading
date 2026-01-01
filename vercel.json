@@ -19,6 +19,10 @@
     {
       "source": "/api/watchlist/update",
       "destination": "/api/watchlist"
+    },
+    {
+      "source": "/api/watchlist/:ticker",
+      "destination": "/api/watchlist"
     }
   ]
 }
