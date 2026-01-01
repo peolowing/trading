@@ -17,6 +17,7 @@ import ClosedPositions from "./components/ClosedPositions";
 import ClosedPositionDetail from "./components/ClosedPositionDetail";
 import AgentsDashboard from "./components/AgentsDashboard";
 import WatchlistLive from "./components/WatchlistLive";
+import Simulator from "./components/Simulator";
 import EntryModal from "./components/EntryModal";
 import AuthModal from "./components/Auth/AuthModal";
 import { useAuth } from "./contexts/AuthContext";
@@ -28,7 +29,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [learnMode, setLearnMode] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
-  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "position-detail", "closed-positions", or "closed-position-detail"
+  const [currentView, setCurrentView] = useState("dashboard"); // "dashboard", "analysis", "position-detail", "closed-positions", "closed-position-detail", "simulator"
   const [aiHistory, setAiHistory] = useState(null);
   const [refreshingAi, setRefreshingAi] = useState(false);
   const [selectedAnalysisTab, setSelectedAnalysisTab] = useState(0); // 0 = latest, 1 = previous, etc.
@@ -362,6 +363,11 @@ export default function App() {
   // Render Watchlist Live if that view is selected
   if (currentView === "watchlist-live") {
     return <WatchlistLive onBack={() => setCurrentView("dashboard")} />;
+  }
+
+  // Render Simulator if that view is selected
+  if (currentView === "simulator") {
+    return <Simulator onBack={() => setCurrentView("dashboard")} />;
   }
 
   // Analysis view - shown when a stock is selected

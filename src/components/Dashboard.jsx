@@ -301,6 +301,24 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
             📊 Live Watchlist
           </button>
           <button
+            onClick={() => onNavigate("simulator")}
+            style={{
+              padding: "10px 20px",
+              background: "#8b5cf6",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            🎮 Simulator
+          </button>
+          <button
             onClick={() => onNavigate("agents")}
             style={{
               padding: "10px 20px",
