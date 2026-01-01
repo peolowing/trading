@@ -679,7 +679,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Edge Score</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms. %</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
                 </tr>
               </thead>
@@ -978,18 +977,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           )}
                         </td>
 
-                        {/* Dagar + Warning */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
-                              {item.days_in_watchlist}d
-                            </span>
-                            {showWarning && (
-                              <span style={{ fontSize: "14px", color: "#f59e0b" }} title={item.time_warning || "Lång väntan"}>⚠︎</span>
-                            )}
-                          </div>
-                        </td>
-
                         {/* Action Buttons */}
                         <td style={{ padding: "10px 12px", textAlign: "center" }}>
                           <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
@@ -1045,7 +1032,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                       {/* Expanderad analys */}
                       {expandedRow === item.ticker && (
                         <tr key={`${item.ticker}-expanded`}>
-                          <td colSpan="15" style={{ padding: "20px", background: "#f8fafc", borderBottom: rowBorder }}>
+                          <td colSpan="14" style={{ padding: "20px", background: "#f8fafc", borderBottom: rowBorder }}>
                             <div style={{ maxWidth: "900px", margin: "0 auto" }}>
                               <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
                                 📊 Hur nära är {item.ticker} att bli 🟢 READY?
