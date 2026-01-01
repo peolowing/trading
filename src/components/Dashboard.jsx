@@ -13,6 +13,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
   const [customInput, setCustomInput] = useState("");
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   useEffect(() => {
     loadWatchlist();
@@ -570,38 +571,64 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
             <span className="tag">{watchlist.length} aktier</span>
           </div>
           {watchlist.length > 0 && (
-            <button
-              onClick={refreshLiveData}
-              disabled={refreshingLive}
-              style={{
-                padding: "6px 12px",
-                background: "transparent",
-                color: refreshingLive ? "#9ca3af" : "#64748b",
-                border: `1px solid ${refreshingLive ? "#d1d5db" : "#e5e7eb"}`,
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: "500",
-                cursor: refreshingLive ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                transition: "all 0.2s"
-              }}
-              onMouseEnter={(e) => {
-                if (!refreshingLive) {
-                  e.currentTarget.style.borderColor = "#94a3b8";
-                  e.currentTarget.style.color = "#475569";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!refreshingLive) {
-                  e.currentTarget.style.borderColor = "#e5e7eb";
-                  e.currentTarget.style.color = "#64748b";
-                }
-              }}
-            >
-              {refreshingLive ? "Uppdaterar..." : "🔄 Uppdatera"}
-            </button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={refreshLiveData}
+                disabled={refreshingLive}
+                style={{
+                  padding: "6px 12px",
+                  background: "transparent",
+                  color: refreshingLive ? "#9ca3af" : "#64748b",
+                  border: `1px solid ${refreshingLive ? "#d1d5db" : "#e5e7eb"}`,
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: "500",
+                  cursor: refreshingLive ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!refreshingLive) {
+                    e.currentTarget.style.borderColor = "#94a3b8";
+                    e.currentTarget.style.color = "#475569";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!refreshingLive) {
+                    e.currentTarget.style.borderColor = "#e5e7eb";
+                    e.currentTarget.style.color = "#64748b";
+                  }
+                }}
+              >
+                {refreshingLive ? "Uppdaterar..." : "🔄 Uppdatera"}
+              </button>
+              <button
+                onClick={() => setShowHelpModal(true)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#f0f9ff",
+                  color: "#0369a1",
+                  border: "1px solid #bae6fd",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#e0f2fe";
+                  e.currentTarget.style.borderColor = "#7dd3fc";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#f0f9ff";
+                  e.currentTarget.style.borderColor = "#bae6fd";
+                }}
+              >
+                ❓ Hjälp
+              </button>
+            </div>
           )}
         </div>
 
@@ -644,12 +671,12 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Pris</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Förändring</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Volym</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms.</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Dag High</th>
                   <th style={{ padding: "8px 12px", textAlign: "right" }}>Dag Low</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>EMA20 Δ%</th>
-                  <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Edge Score</th>
+                  <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms. %</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Dagar</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
                 </tr>
@@ -738,6 +765,13 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     const turnoverMSEK = (livePrice && volume)
                       ? (livePrice * volume) / 1_000_000
                       : item.turnoverMSEK;
+
+                    // Calculate relative turnover (turnover as % of market cap)
+                    const marketCap = quote.marketCap;
+                    const marketCapMSEK = marketCap ? marketCap / 1_000_000 : null;
+                    const relativeTurnover = (turnoverMSEK && marketCapMSEK)
+                      ? (turnoverMSEK / marketCapMSEK) * 100
+                      : null;
 
                     return (
                       <tr
@@ -832,16 +866,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           {volume ? volume.toLocaleString() : "—"}
                         </td>
 
-                        {/* Omsättning */}
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
-                          <span style={{
-                            color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#64748b" : "#94a3b8",
-                            fontWeight: "500"
-                          }}>
-                            {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}M` : "—"}
-                          </span>
-                        </td>
-
                         {/* Dag High (Live) */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
                           {dayHigh ? dayHigh.toFixed(2) : "—"}
@@ -860,7 +884,9 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                                 fontWeight: "600",
                                 color: ema20Color,
                                 fontVariantNumeric: "tabular-nums",
-                                fontSize: showBreakoutAlert ? "14px" : "13px"
+                                fontSize: showBreakoutAlert ? "14px" : "13px",
+                                textDecoration: (item.current_status !== "READY" && (emaDist > 4 || emaDist < 0)) ? "underline" : "none",
+                                textDecorationThickness: "2px"
                               }}>
                                 {emaDist > 0 ? '+' : ''}{emaDist.toFixed(1)}%
                               </span>
@@ -877,20 +903,6 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           ) : "—"}
                         </td>
 
-                        {/* RSI-zon */}
-                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
-                          <span style={{
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            color: rsiZoneColor,
-                            background: rsiZoneColor === "#16a34a" ? "#f0fdf4" : rsiZoneColor === "#dc2626" ? "#fef2f2" : "#f8fafc",
-                            padding: "2px 6px",
-                            borderRadius: "4px"
-                          }}>
-                            {rsiZone || "—"}
-                          </span>
-                        </td>
-
                         {/* Edge Score */}
                         <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
                           {item.edge_score !== undefined && item.edge_score !== null ? (
@@ -900,12 +912,49 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                               color: item.edge_score >= 70 ? "#16a34a" : item.edge_score >= 50 ? "#f59e0b" : "#64748b",
                               background: item.edge_score >= 70 ? "#f0fdf4" : item.edge_score >= 50 ? "#fef3c7" : "#f8fafc",
                               padding: "4px 8px",
-                              borderRadius: "4px"
+                              borderRadius: "4px",
+                              textDecoration: (item.current_status !== "READY" && item.edge_score < 70) ? "underline" : "none",
+                              textDecorationThickness: "2px"
                             }}>
                               {item.edge_score}
                             </span>
                           ) : (
                             <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>
+                          )}
+                        </td>
+
+                        {/* RSI-zon */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }} onClick={() => onSelectStock(item.ticker)}>
+                          <span style={{
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            color: rsiZoneColor,
+                            background: rsiZoneColor === "#16a34a" ? "#f0fdf4" : rsiZoneColor === "#dc2626" ? "#fef2f2" : "#f8fafc",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            textDecoration: (item.current_status !== "READY" && (rsiZone === "WEAK" || rsiZone === "HOT")) ? "underline" : "none",
+                            textDecorationThickness: "2px"
+                          }}>
+                            {rsiZone || "—"}
+                          </span>
+                        </td>
+
+                        {/* Omsättning (Relativ) */}
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={() => onSelectStock(item.ticker)}>
+                          {relativeTurnover !== null ? (
+                            <span style={{
+                              color: relativeTurnover >= 1.0 ? "#16a34a" : relativeTurnover >= 0.3 ? "#3b82f6" : "#94a3b8",
+                              fontWeight: "500"
+                            }}>
+                              {relativeTurnover.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span style={{
+                              color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#3b82f6" : "#94a3b8",
+                              fontWeight: "500"
+                            }}>
+                              {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}M` : "—"}
+                            </span>
                           )}
                         </td>
 
@@ -978,9 +1027,17 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
               </tbody>
             </table>
 
-            {/* Status reason as second row below table - optional compact info */}
-            <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b" }}>
-              <strong>Senaste uppdatering:</strong> Kör <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>POST /api/watchlist/update</code> för daglig statusuppdatering
+            {/* Info section below table */}
+            <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div>
+                <strong>Oms. %:</strong> Relativ omsättning (daglig omsättning / börsvärde × 100).
+                <span style={{ color: "#16a34a", fontWeight: "600" }}> ≥1.0% = Hög likviditet</span>,
+                <span style={{ color: "#3b82f6", fontWeight: "600" }}> 0.3-1.0% = OK</span>,
+                <span style={{ color: "#94a3b8", fontWeight: "600" }}> &lt;0.3% = Låg</span>
+              </div>
+              <div>
+                <strong>Senaste uppdatering:</strong> Kör <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>POST /api/watchlist/update</code> för daglig statusuppdatering
+              </div>
             </div>
           </div>
         )}
@@ -1192,6 +1249,337 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
           }}
           onConfirm={handleAddToPortfolio}
         />
+      )}
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px"
+          }}
+          onClick={() => setShowHelpModal(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              maxWidth: "800px",
+              maxHeight: "90vh",
+              overflow: "auto",
+              padding: "24px",
+              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
+                📚 Guide: Hur du använder bevakningslistan
+              </h2>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  padding: "0",
+                  lineHeight: "1"
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ fontSize: "14px", color: "#334155", lineHeight: "1.6" }}>
+              {/* Mest kritiska faktorer */}
+              <section style={{ marginBottom: "24px" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", marginBottom: "12px", borderBottom: "2px solid #e2e8f0", paddingBottom: "8px" }}>
+                  🎯 Mest kritiska för köpbeslut (i prioritetsordning)
+                </h3>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
+                    1. Status (Emoji) - TYNGST
+                  </h4>
+                  <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                    <div style={{ marginBottom: "4px" }}><span style={{ fontWeight: "600" }}>🟢 READY</span> = Perfekt läge att köpa NU - alla förutsättningar uppfyllda</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ fontWeight: "600" }}>🟡 APPROACHING</span> = Snart köpläge, bevaka noga</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ fontWeight: "600" }}>🔵 WAIT_PULLBACK</span> = Vänta på bättre pris/pullback</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ fontWeight: "600" }}>🟠 BREAKOUT_ONLY</span> = Köp bara vid breakout över motstånd</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ fontWeight: "600" }}>🔴 INVALIDATED</span> = Ta bort från listan, setupen är ogiltig</div>
+                    <div style={{ marginTop: "8px", padding: "8px", background: "#f8fafc", borderRadius: "4px", fontSize: "12px", color: "#475569" }}>
+                      <strong>💡 Hur beräknas status?</strong><br/>
+                      Status är ett <em>sammansatt beslut</em> baserat på EMA20 Δ%, RSI-zon, volym, EMA50 slope och prisstruktur. De andra kolumnerna visar underliggande faktorer så du kan verifiera beslutet.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
+                    2. EMA20 Δ% - NÄST TYNGST
+                  </h4>
+                  <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>Grön, inom ±1.5%</span> = Perfekt pullback-läge! ✅</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>Grön, inom ±0.5%</span> = 🎯 BREAKOUT ALERT - köp NU!</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>Blå, 1.5-3%</span> = Närmar sig, bevaka</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#f59e0b", fontWeight: "600" }}>Orange, &gt;5%</span> = För långt från trend, vänta</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
+                    3. Edge Score
+                  </h4>
+                  <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>Grön ≥70</span> = Starkast statistisk edge, prioritera dessa!</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#f59e0b", fontWeight: "600" }}>Orange 50-69</span> = OK edge, kan handlas</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#64748b", fontWeight: "600" }}>Grå &lt;50</span> = Svag edge, överväg att skippa</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
+                    4. RSI-zon
+                  </h4>
+                  <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>CALM</span> = Bäst, inte översträckt (RSI 40-60)</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>WARM</span> = OK, lite varmt (RSI 60-70)</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#dc2626", fontWeight: "600" }}>HOT</span> = Överköpt, vänta på pullback</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#f59e0b", fontWeight: "600" }}>WEAK</span> = Svag, kanske undvik</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
+                    5. Oms. % (Relativ omsättning)
+                  </h4>
+                  <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>Grön ≥1.0%</span> = Hög likviditet, lätt att köpa/sälja ✅</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>Blå 0.3-1.0%</span> = OK likviditet</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#94a3b8", fontWeight: "600" }}>Ljusgrå &lt;0.3%</span> = Låg likviditet, risk för spread</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
+                    6. Dagar (Tid sedan signal)
+                  </h4>
+                  <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                    <div style={{ marginBottom: "4px" }}>1-3 dagar = Färsk signal, högre sannolikhet</div>
+                    <div style={{ marginBottom: "4px" }}>4-7 dagar = OK, fortfarande giltig</div>
+                    <div style={{ marginBottom: "4px" }}>&gt;10 dagar med ⚠︎ = Gammal signal, överväg att ta bort</div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Checklista */}
+              <section style={{ marginBottom: "24px", background: "#f0fdf4", padding: "16px", borderRadius: "8px", border: "1px solid #a7f3d0" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#065f46", marginBottom: "12px" }}>
+                  ✅ Praktiskt beslutsflöde för köp
+                </h3>
+                <div style={{ fontSize: "13px", color: "#065f46" }}>
+                  <div style={{ marginBottom: "12px", fontWeight: "600" }}>Köp när ALLA dessa stämmer:</div>
+                  <div style={{ paddingLeft: "16px" }}>
+                    <div style={{ marginBottom: "4px" }}>✅ <strong>Steg 1:</strong> Status = 🟢 READY</div>
+                    <div style={{ marginBottom: "4px" }}>✅ <strong>Steg 2:</strong> EMA20 Δ% inom ±1.5% (grön)</div>
+                    <div style={{ marginBottom: "4px" }}>✅ <strong>Steg 3:</strong> Edge Score ≥70</div>
+                    <div style={{ marginBottom: "4px" }}>✅ <strong>Steg 4:</strong> RSI-zon = CALM</div>
+                    <div style={{ marginBottom: "8px", fontSize: "12px", color: "#047857" }}>
+                      <em>Om alla 4 är uppfyllda → stark köpsignal! Oms. % och Dagar är stödjande faktorer.</em>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Analysera icke-gröna statusar */}
+              <section style={{ marginBottom: "24px", background: "#eff6ff", padding: "16px", borderRadius: "8px", border: "1px solid #93c5fd" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1e3a8a", marginBottom: "12px" }}>
+                  🔎 Om status INTE är 🟢 - hur nära är den?
+                </h3>
+                <div style={{ fontSize: "13px", color: "#1e40af" }}>
+                  <p style={{ marginBottom: "12px" }}><strong>Status är lätt om den är grön - men vad gör du när den är blå/gul/orange?</strong><br/>Här är hur du bedömer hur nära ett köpläge aktien är:</p>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>🟡 APPROACHING (Gul) - Hur nära är den?</strong><br/>
+                    ✓ Kolla <strong>EMA20 Δ%</strong>: Om den är 2.5% → nästan där! Om 3.8% → lite längre kvar<br/>
+                    ✓ Kolla <strong>RSI-zon</strong>: Är den redan CALM? → Perfekt, väntar bara på pullback<br/>
+                    ✓ Kolla <strong>Edge Score</strong>: ≥70? → Starkt case, bevaka aktivt!<br/>
+                    <em style={{ fontSize: "12px" }}>→ Om EMA20 Δ% närmar sig 2% OCH RSI = CALM = börja förbereda dig!</em>
+                  </div>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>🔵 WAIT_PULLBACK (Blå) - Varför inte grön?</strong><br/>
+                    Tre möjliga orsaker - kolla vilken som gäller:<br/>
+                    1. <strong>EMA20 Δ% &gt;4%</strong> (orange) → För långt bort, vänta på pullback<br/>
+                    2. <strong>EMA20 Δ% negativt</strong> → Under EMA20, pullback för djup<br/>
+                    3. <strong>RSI-zon = WEAK</strong> → Momentum för svagt (RSI &lt;40)<br/>
+                    <em style={{ fontSize: "12px" }}>→ Fokusera på den parameter som blockerar. T.ex. om EMA20 Δ% = 5.2%, bevaka när den går mot 3%.</em>
+                  </div>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>🟠 BREAKOUT_ONLY (Orange) - Specialfall</strong><br/>
+                    ✓ RSI &gt;65 (HOT) → För starkt momentum för pullback-entry<br/>
+                    ✓ Kolla <strong>EMA20 Δ%</strong>: Om den är grön (0-2%) → priset ÄR vid EMA20, men för hett<br/>
+                    <em style={{ fontSize: "12px" }}>→ Två alternativ: 1) Vänta tills RSI svalnar till CALM, eller 2) Köp endast vid breakout över motstånd</em>
+                  </div>
+
+                  <div>
+                    <strong>💡 Pro-taktik: Daglig diagnos</strong><br/>
+                    Varje morgon efter 🔄 Uppdatera:<br/>
+                    • 🟡 som går mot grön EMA20 Δ% + CALM RSI = <strong>lägg i "bevaka aktivt"</strong><br/>
+                    • 🔵 med EMA20 Δ% 5% → 4% → 3.5% = <strong>rätt riktning, fortsätt bevaka</strong><br/>
+                    • 🟠 med RSI 68 → 62 → 58 = <strong>börjar svalna, snart CALM</strong>
+                  </div>
+                </div>
+              </section>
+
+              {/* Edge Score vs Status */}
+              <section style={{ marginBottom: "24px", background: "#faf5ff", padding: "16px", borderRadius: "8px", border: "1px solid #d8b4fe" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#6b21a8", marginBottom: "12px" }}>
+                  🎯 Edge Score vs Status - Vad är skillnaden?
+                </h3>
+                <div style={{ fontSize: "13px", color: "#581c87" }}>
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>Edge Score</strong> (Backtest-baserad kvalitet)<br/>
+                    <div style={{ paddingLeft: "16px", marginTop: "4px" }}>
+                      • <strong>Vad:</strong> En siffra 0-100 som visar hur BRA denna aktie historiskt har presterat med din strategi<br/>
+                      • <strong>Källa:</strong> Kommer från backtesting - analys av tidigare trades<br/>
+                      • <strong>Mäter:</strong> Kvalitet och tillförlitlighet (win rate, genomsnittlig vinst vs förlust, antal signaler)<br/>
+                      • <strong>Tolkning:</strong> ≥70 = Grön (hög kvalitet) | 50-69 = Orange (OK) | &lt;50 = Grå (låg kvalitet)<br/>
+                      • <em style={{ fontSize: "12px" }}>En aktie kan ha Edge Score 85 (mycket bra historik) men ändå inte vara i rätt läge just NU för att köpa.</em>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>Status</strong> (Nuläge för köptiming)<br/>
+                    <div style={{ paddingLeft: "16px", marginTop: "4px" }}>
+                      • <strong>Vad:</strong> En bedömning av om aktien är i rätt läge att köpa JUST NU<br/>
+                      • <strong>Källa:</strong> Beräknas live från tekniska indikatorer (EMA20 Δ%, RSI-zon, volym, trend)<br/>
+                      • <strong>Mäter:</strong> Timing och setup-kvalitet i nuläget (pullback nära EMA20? Momentum lagom? Trend intakt?)<br/>
+                      • <strong>Tolkning:</strong> 🟢 READY = Perfekt läge NU | 🟡 APPROACHING = Nästan där | 🔵 WAIT_PULLBACK = Vänta<br/>
+                      • <em style={{ fontSize: "12px" }}>En aktie kan ha status 🟢 READY (perfekt timing nu) men Edge Score 55 (medioker historik).</em>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: "12px", background: "#fff", padding: "12px", borderRadius: "6px", border: "1px solid #e9d5ff" }}>
+                    <strong>Hur de samarbetar:</strong><br/>
+                    <div style={{ paddingLeft: "16px", marginTop: "6px", fontSize: "12px" }}>
+                      <div style={{ marginBottom: "4px" }}>✅ Edge Score 85 + 🟢 READY = <strong>PERFEKT!</strong> (Hög kvalitet + rätt timing)</div>
+                      <div style={{ marginBottom: "4px" }}>⚠️ Edge Score 85 + 🟡 APPROACHING = Bra aktie, vänta lite till</div>
+                      <div style={{ marginBottom: "4px" }}>⚠️ Edge Score 55 + 🟢 READY = Rätt timing men tveksam kvalitet</div>
+                      <div style={{ marginBottom: "4px" }}>❌ Edge Score 45 + 🔵 WAIT_PULLBACK = Både dålig kvalitet OCH fel timing</div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "#fff", padding: "12px", borderRadius: "6px", border: "1px solid #e9d5ff" }}>
+                    <strong>💡 Praktiskt beslutsflöde:</strong><br/>
+                    <div style={{ paddingLeft: "16px", marginTop: "6px", fontSize: "12px" }}>
+                      1. <strong>Filtrera först på Edge Score</strong> (≥70) = "Vilka aktier är värda att bevaka?"<br/>
+                      2. <strong>Sen kolla Status dagligen</strong> = "När är rätt läge att köpa?"<br/>
+                      3. <strong>Kombinera med understrykningar</strong> = "Vad blockerar en perfekt setup?"
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Varningssignaler */}
+              <section style={{ marginBottom: "24px", background: "#fef2f2", padding: "16px", borderRadius: "8px", border: "1px solid #fecaca" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#991b1b", marginBottom: "12px" }}>
+                  🚨 Varningssignaler (VÄNTA med köp)
+                </h3>
+                <div style={{ fontSize: "13px", color: "#991b1b", paddingLeft: "16px" }}>
+                  <div style={{ marginBottom: "4px" }}>⚠️ EMA20 Δ% orange (&gt;5%) - priset för långt från trend</div>
+                  <div style={{ marginBottom: "4px" }}>⚠️ RSI-zon = HOT - överköpt, vänta på pullback</div>
+                  <div style={{ marginBottom: "4px" }}>⚠️ Dagar &gt;10 med varning (⚠︎) - signal för gammal</div>
+                  <div style={{ marginBottom: "4px" }}>⚠️ Edge Score &lt;50 - svag statistisk edge</div>
+                  <div style={{ marginBottom: "4px" }}>⚠️ Status = 🔴 INVALIDATED - ta bort från listan</div>
+                </div>
+              </section>
+
+              {/* Hur beräknas status */}
+              <section style={{ marginBottom: "24px", background: "#fefce8", padding: "16px", borderRadius: "8px", border: "1px solid #fde047" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#854d0e", marginBottom: "12px" }}>
+                  🔍 Hur beräknas Status? (Teknisk förklaring)
+                </h3>
+                <div style={{ fontSize: "13px", color: "#713f12" }}>
+                  <p style={{ marginBottom: "12px" }}>Status är <strong>inte manuell</strong> – den beräknas automatiskt från flera tekniska faktorer:</p>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>Steg 1: Trend-check (hård invalidering)</strong><br/>
+                    Om <em>någon</em> är sann → 🔴 INVALIDATED:<br/>
+                    • Pris &lt; EMA50<br/>
+                    • EMA50 slope &lt; 0 (trenden pekar nedåt)<br/>
+                    • Ingen "higher low" (strukturen bruten)
+                  </div>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>Steg 2: Beräkna avstånd till EMA20</strong><br/>
+                    <code style={{ background: "#fef3c7", padding: "2px 6px", borderRadius: "3px" }}>distEma20 = ((pris - ema20) / ema20) × 100</code><br/>
+                    • FAR: &gt;4%<br/>
+                    • APPROACHING: 2-4%<br/>
+                    • NEAR: 0-2% (ovanför EMA20)<br/>
+                    • TOO_DEEP: &lt;0% (under EMA20)
+                  </div>
+
+                  <div style={{ marginBottom: "12px" }}>
+                    <strong>Steg 3: Statusmaskin</strong><br/>
+                    • <strong>🟢 READY</strong> = NEAR (0-2%) + RSI 40-55 (CALM) + OK volym<br/>
+                    • <strong>🟡 APPROACHING</strong> = APPROACHING (2-4%)<br/>
+                    • <strong>🟠 BREAKOUT_ONLY</strong> = RSI &gt;65 (för starkt momentum)<br/>
+                    • <strong>🔵 WAIT_PULLBACK</strong> = FAR (&gt;4%) eller TOO_DEEP eller RSI &lt;40
+                  </div>
+
+                  <p style={{ fontSize: "12px", fontStyle: "italic", color: "#92400e" }}>
+                    → Status sammanfattar tekniken. De andra kolumnerna (EMA20 Δ%, RSI-zon, Edge Score) låter dig verifiera och dubbelkolla.
+                  </p>
+                </div>
+              </section>
+
+              {/* Pro-tips */}
+              <section style={{ marginBottom: "0" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", marginBottom: "12px", borderBottom: "2px solid #e2e8f0", paddingBottom: "8px" }}>
+                  💡 Pro-tips
+                </h3>
+                <div style={{ fontSize: "13px", paddingLeft: "16px" }}>
+                  <div style={{ marginBottom: "6px" }}><strong>Sortering:</strong> Listan sorterar automatiskt på status, så de bästa signalerna är högst upp!</div>
+                  <div style={{ marginBottom: "6px" }}><strong>Breakout Alert:</strong> Om du ser "🎯 NÄRA!" under EMA20 Δ% = perfekt läge att bevaka</div>
+                  <div style={{ marginBottom: "6px" }}><strong>Daglig check:</strong> Tryck 🔄 Uppdatera varje morgon för fresh live-data</div>
+                  <div style={{ marginBottom: "6px" }}><strong>Info-knapp:</strong> Klicka 🔗 för att öppna aktien på Yahoo Finance</div>
+                  <div style={{ marginBottom: "6px" }}><strong>Fokusera:</strong> Helst max 3-5 aktier i bevakningslistan samtidigt för bäst fokus</div>
+                </div>
+              </section>
+            </div>
+
+            <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                style={{
+                  padding: "10px 24px",
+                  background: "#0369a1",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                Stäng
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
