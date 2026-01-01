@@ -1653,10 +1653,10 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
 
                   <div style={{ background: "#fef3c7", padding: "8px 12px", borderRadius: "6px", marginBottom: "12px" }}>
                     <strong>🔥 NYA KRITISKA FILTER:</strong><br/>
-                    <strong>Filter #1 - Edge:</strong> Kräver ≥70% edge_score för READY<br/>
-                    <strong>Filter #2 - Volym:</strong> Kräver ≥1.0x relativ volym för READY (var 0.5x)<br/>
+                    <strong>Filter #1 - Edge:</strong> Kräver ≥70% edge_score för READY <em>och BREAKOUT_READY</em><br/>
+                    <strong>Filter #2 - Volym:</strong> Kräver ≥1.0x för READY, ≥1.2x för BREAKOUT_READY (var 0.5x)<br/>
                     <strong>Filter #3 - Trend:</strong> Kräver pris &gt; EMA20 &gt; EMA50 + båda slopes positiva<br/>
-                    <strong>Cooldown:</strong> Efter INVALIDATED krävs 3 dagars återhämtning<br/>
+                    <strong>Cooldown:</strong> Efter INVALIDATED krävs 3 dagar för READY, 1 dag för BREAKOUT_READY<br/>
                     <strong>Auto-remove:</strong> Städar bort aktier som inte gett setup på 15 dagar
                   </div>
 
