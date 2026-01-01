@@ -20,6 +20,14 @@ export default function Simulator({ onBack }) {
         body: JSON.stringify({ ticker, startDate, endDate })
       });
 
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 500));
+        throw new Error('Server returnerade ett oväntat svar. Se konsolen för detaljer.');
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Något gick fel');
