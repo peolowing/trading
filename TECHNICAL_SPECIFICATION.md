@@ -1,6 +1,6 @@
 # Weekly Trading AI - Teknisk Specifikation
 
-**Version:** 2.1 (Fas 1 - Statistisk Robusthet)
+**Version:** 2.2 (Fas 2 - Strukturförbättringar)
 **Datum:** 2026-01-01
 **Applikation:** Swing Trading Decision System för svenska aktier
 
@@ -819,6 +819,67 @@ const benchmarkMetrics = {
 ---
 
 ## 14. CHANGELOG
+
+### Version 2.2 - FAS 2: Strukturförbättringar (2026-01-01)
+
+**🟢 STRUKTURELLA FÖRBÄTTRINGAR:**
+
+**FIX #4: Pivot-baserad Higher-Low Detection**
+- ✅ Ny funktion: `findPivotLows(candles, lookback = 2)`
+- ✅ Detekterar riktiga swing lows (pivot lows) istället för 3-dagars sekvens
+- ✅ En pivot low = low som är lägre än 2 candles före OCH 2 candles efter
+- ✅ Kräver att senaste pivot low > föregående pivot low
+- **Före:** Kontrollerade bara senaste 3 dagars lows i rad
+- **Efter:** Analyserar swing-struktur över 10-20 dagar och hittar pivots
+- **Motivering:** 3-dagars sekvens missar verklig swing-struktur i trender med normal variabilitet
+- **Impact:** Bättre strukturvalidering, färre falska negativa i sunda trender
+
+**FIX #5: Breakout Nivå-krav (20D High)**
+- ✅ Ny funktion: `calculate20DayHigh(candles)`
+- ✅ BREAKOUT_READY kräver nu: `close > 20-dagars high` (inte bara `close > EMA20`)
+- ✅ Fallback till EMA20 om 20D high ej tillgänglig
+- **Före:** BREAKOUT_READY = RSI >65 + pris > EMA20 + volym ≥1.2x
+- **Efter:** BREAKOUT_READY = RSI >65 + pris > 20D high + volym ≥1.2x + edge ≥70%
+- **Motivering:** Riktiga breakouts definieras av nivåer, inte bara momentum
+- **Impact:** Filtrerar bort "momentum utan nivå", fångar riktiga breakouts
+
+**FIX #6: RECLAIM-Branch (EMA20 Dip Tolerance)**
+- ✅ Ny proximity-zon: `RECLAIM` (-1% till 0% under EMA20)
+- ✅ Ny status: `WATCH_RECLAIM` - väntar på reclaim över EMA20
+- ✅ Tillåter kort dip under EMA20 utan omedelbar invalidering
+- **Krav för RECLAIM:**
+  - EMA20 > EMA50 (baseTrend OK)
+  - EMA20 slope > 0 och EMA50 slope > 0
+  - Higher low struktur intakt
+  - Volym ≥1.0x för WATCH_RECLAIM
+- **Före:** close < EMA20 = omedelbar INVALIDATED
+- **Efter:** close mellan -1% och 0% = WATCH_RECLAIM, väntar på reclaim
+- **Motivering:** Många högkvalitativa pullbacks dippar kort under EMA20 intradag/1-2 stängningar
+- **Impact:** Fångar fler bra entries utan att tappa riskkontroll
+
+**UPPDATERADE FUNKTIONER:**
+```javascript
+// Pivot detection
+export function findPivotLows(candles, lookback = 2)
+export function hasHigherLow(candles)  // Nu pivot-baserad
+
+// Breakout level
+export function calculate20DayHigh(candles)
+
+// Input structure
+structure: {
+  higherLow: hasHigherLow(candles.slice(-20)),  // Behöver mer data för pivots
+  high20D: calculate20DayHigh(candles)
+}
+```
+
+**BESLUTS LOGIK-ÄNDRINGAR:**
+- Trendfilter: Separerat `trendOk` och `baseTrendOk` för RECLAIM-stöd
+- Proximity: 6 zoner (FAR, APPROACHING, NEAR, PERFECT, RECLAIM, TOO_DEEP)
+- BREAKOUT_READY: Kräver nu `close > high20D` istället för bara `close > ema20`
+- Nya statuses: `WATCH_RECLAIM`, `WAIT_FOR_RECLAIM`
+
+---
 
 ### Version 2.1 - FAS 1: Statistisk Robusthet (2026-01-01)
 

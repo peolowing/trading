@@ -1622,13 +1622,15 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <p style={{ marginBottom: "12px" }}>Status är <strong>inte manuell</strong> – den beräknas automatiskt från flera tekniska faktorer:</p>
 
                   <div style={{ marginBottom: "12px" }}>
-                    <strong>Steg 1: Trend-check (SKÄRPT 🔥)</strong><br/>
-                    Om <em>någon</em> är sann → 🔴 INVALIDATED:<br/>
-                    • Pris &lt; EMA20 <em>(nytt krav!)</em><br/>
+                    <strong>Steg 1: Trend-check (SKÄRPT 🔥 + FAS 2 RECLAIM)</strong><br/>
+                    <strong>Normal invalidering</strong> om pris &lt; -1% under EMA20:<br/>
                     • EMA20 &lt; EMA50<br/>
-                    • EMA50 slope ≤ 0 (trenden pekar nedåt)<br/>
-                    • EMA20 slope ≤ 0 <em>(nytt krav!)</em><br/>
-                    • Inga 3 stigande lows i rad <em>(skärpt!)</em>
+                    • EMA50 slope ≤ 0 (5-dagars, mindre brus 🆕)<br/>
+                    • EMA20 slope ≤ 0 (5-dagars, mindre brus 🆕)<br/>
+                    • Ingen pivot-baserad högre låg <em>(förbättrad strukturanalys 🆕)</em><br/>
+                    <br/>
+                    <strong>🔄 RECLAIM-zon</strong> (FAS 2 🆕): -1% till 0% under EMA20<br/>
+                    → Tillåter kort dip, väntar på reclaim över EMA20
                   </div>
 
                   <div style={{ marginBottom: "12px" }}>
@@ -1638,25 +1640,35 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     • APPROACHING: 2-4%<br/>
                     • NEAR: 1-2% (ovanför EMA20)<br/>
                     • <strong>🎯 PERFECT</strong>: 0-1% <em>(sweet spot!)</em><br/>
-                    • TOO_DEEP: &lt;0% (under EMA20)
+                    • <strong>🔄 RECLAIM</strong>: -1% till 0% <em>(FAS 2 ny zon! 🆕)</em><br/>
+                    • TOO_DEEP: &lt;-1% (för djupt under EMA20)
                   </div>
 
                   <div style={{ marginBottom: "12px" }}>
-                    <strong>Steg 3: Statusmaskin (med 3 kritiska filter!)</strong><br/>
-                    • <strong>🟢 READY</strong> = (PERFECT 0-1% eller NEAR 1-2%) + RSI 40-55 + <strong>Volym ≥1.0x</strong> + <strong>Edge ≥70%</strong> + <em>cooldown OK</em><br/>
-                    • <strong>🔴 BREAKOUT_READY</strong> = RSI &gt;65 + Pris &gt; EMA20 + <strong>Volym ≥1.2x</strong><br/>
+                    <strong>Steg 3: Statusmaskin (med kritiska filter + FAS 2 🆕)</strong><br/>
+                    • <strong>🟢 READY</strong> = (PERFECT 0-1% eller NEAR 1-2%) + RSI 40-55 + Volym ≥1.0x + Edge ≥70% (justerad) + minTrades ≥30 + cooldown OK<br/>
+                    • <strong>🔄 WATCH_RECLAIM</strong> = RECLAIM-zon (-1% till 0%) + RSI 40-55 + Volym ≥1.0x → väntar på reclaim över EMA20 <em>(FAS 2 ny status! 🆕)</em><br/>
+                    • <strong>🚀 BREAKOUT_READY</strong> = RSI &gt;65 + Pris &gt; 20D high + Volym ≥1.2x + Edge ≥70% <em>(nivåkrav uppdaterat FAS 2 🆕)</em><br/>
                     • <strong>🟡 APPROACHING</strong> = APPROACHING (2-4%) eller blockeras av edge/volym/cooldown<br/>
-                    • <strong>🟠 BREAKOUT_ONLY</strong> = RSI &gt;65 men saknar volym/pris-krav<br/>
-                    • <strong>🔵 WAIT_PULLBACK</strong> = FAR (&gt;4%) eller TOO_DEEP eller RSI &lt;40<br/>
+                    • <strong>🟠 BREAKOUT_ONLY</strong> = RSI &gt;65 men saknar volym/nivå-krav<br/>
+                    • <strong>🔵 WAIT_PULLBACK</strong> = FAR (&gt;4%) eller TOO_DEEP (&lt;-1%) eller RSI &lt;40<br/>
                     • <strong>⏰ EXPIRED</strong> = &gt;15 dagar utan setup → auto-borttagen
                   </div>
 
+                  <div style={{ background: "#dbeafe", padding: "8px 12px", borderRadius: "6px", marginBottom: "8px" }}>
+                    <strong>🆕 FAS 2 - Strukturförbättringar:</strong><br/>
+                    <strong>Pivot-baserad högre låg:</strong> Kräver 2 stigande swing lows (ej bara 3-dagars sekvens)<br/>
+                    <strong>Breakout-nivå:</strong> BREAKOUT_READY kräver pris &gt; 20-dagars high (ej bara EMA20)<br/>
+                    <strong>RECLAIM-zon:</strong> Tillåter -1% till 0% under EMA20, väntar på reclaim<br/>
+                    <strong>Mindre brus:</strong> EMA slopes beräknas över 5 dagar (ej 1 dag)
+                  </div>
+
                   <div style={{ background: "#fef3c7", padding: "8px 12px", borderRadius: "6px", marginBottom: "12px" }}>
-                    <strong>🔥 NYA KRITISKA FILTER:</strong><br/>
-                    <strong>Filter #1 - Edge:</strong> Kräver ≥70% edge_score för READY <em>och BREAKOUT_READY</em><br/>
-                    <strong>Filter #2 - Volym:</strong> Kräver ≥1.0x för READY, ≥1.2x för BREAKOUT_READY (var 0.5x)<br/>
-                    <strong>Filter #3 - Trend:</strong> Kräver pris &gt; EMA20 &gt; EMA50 + båda slopes positiva<br/>
-                    <strong>Cooldown:</strong> Efter INVALIDATED krävs 3 dagar för READY, 1 dag för BREAKOUT_READY<br/>
+                    <strong>🔥 FAS 1 - Statistisk Robusthet:</strong><br/>
+                    <strong>Edge confidence:</strong> Justerad edge_score baserat på antal trades (kräver ≥30 trades)<br/>
+                    <strong>Volym:</strong> Kräver ≥1.0x för READY, ≥1.2x för BREAKOUT_READY<br/>
+                    <strong>Likviditet:</strong> Kräver ≥5M SEK genomsnittlig dagsomsättning<br/>
+                    <strong>Cooldown:</strong> 3 dagar för READY, 1 dag för BREAKOUT_READY efter invalidering<br/>
                     <strong>Auto-remove:</strong> Städar bort aktier som inte gett setup på 15 dagar
                   </div>
 
