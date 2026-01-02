@@ -1516,7 +1516,10 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>Blå 30-100 MSEK</span> = OK likviditet</div>
                     <div style={{ marginBottom: "4px" }}><span style={{ color: "#94a3b8", fontWeight: "600" }}>Ljusgrå &lt;30 MSEK</span> = Låg likviditet, risk för spread</div>
                     <div style={{ marginTop: "8px", fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>
-                      Visar: Dagsomsättning i miljoner SEK (pris × volym), med procent av börsvärde i parantes
+                      Visar: <strong>Dagsomsättning i MSEK</strong> (pris × volym) och <strong>procent i parantes</strong> (omsättning ÷ börsvärde × 100)
+                    </div>
+                    <div style={{ marginTop: "6px", fontSize: "12px", color: "#64748b" }}>
+                      <strong>Procent-guide:</strong> 0.05-0.20% = Normalt för stora bolag, 0.20-0.50% = Bra likviditet, 0.50-1.0% = Hög aktivitet, &gt;1.0% = Mycket hög aktivitet
                     </div>
                   </div>
                 </div>
