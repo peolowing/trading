@@ -696,7 +696,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>EMA20 Δ%</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>Edge Score</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}>RSI-zon</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms. %</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Oms. (MSEK)</th>
                   <th style={{ padding: "8px 12px", textAlign: "center" }}></th>
                 </tr>
               </thead>
@@ -1002,23 +1002,16 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           </span>
                         </td>
 
-                        {/* Omsättning (Relativ) */}
+                        {/* Omsättning (Absolut i MSEK) */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
-                          {relativeTurnover !== null ? (
-                            <span style={{
-                              color: relativeTurnover >= 1.0 ? "#16a34a" : relativeTurnover >= 0.3 ? "#3b82f6" : "#94a3b8",
-                              fontWeight: "500"
-                            }}>
-                              {relativeTurnover.toFixed(2)}%
-                            </span>
-                          ) : (
-                            <span style={{
-                              color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#3b82f6" : "#94a3b8",
-                              fontWeight: "500"
-                            }}>
-                              {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}M` : "—"}
-                            </span>
-                          )}
+                          <span style={{
+                            color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#3b82f6" : "#94a3b8",
+                            fontWeight: "500"
+                          }}
+                          title={`Dagsomsättning: ${turnoverMSEK ? turnoverMSEK.toFixed(0) : '—'} miljoner SEK`}
+                          >
+                            {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}` : "—"}
+                          </span>
                         </td>
 
                         {/* Action Buttons */}
@@ -1184,10 +1177,10 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
             {/* Info section below table */}
             <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b", display: "flex", flexDirection: "column", gap: "8px" }}>
               <div>
-                <strong>Oms. %:</strong> Relativ omsättning (daglig omsättning / börsvärde × 100).
-                <span style={{ color: "#16a34a", fontWeight: "600" }}> ≥1.0% = Hög likviditet</span>,
-                <span style={{ color: "#3b82f6", fontWeight: "600" }}> 0.3-1.0% = OK</span>,
-                <span style={{ color: "#94a3b8", fontWeight: "600" }}> &lt;0.3% = Låg</span>
+                <strong>Oms. (MSEK):</strong> Dagsomsättning i miljoner SEK (pris × volym).
+                <span style={{ color: "#16a34a", fontWeight: "600" }}> ≥100 MSEK = Hög likviditet</span>,
+                <span style={{ color: "#3b82f6", fontWeight: "600" }}> 30-100 MSEK = OK</span>,
+                <span style={{ color: "#94a3b8", fontWeight: "600" }}> &lt;30 MSEK = Låg</span>
               </div>
               <div>
                 <strong>Senaste uppdatering:</strong> Kör <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>POST /api/watchlist/update</code> för daglig statusuppdatering
@@ -1516,12 +1509,15 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
 
                 <div style={{ marginBottom: "16px" }}>
                   <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#0369a1", marginBottom: "8px" }}>
-                    5. Oms. % (Relativ omsättning)
+                    5. Oms. (MSEK) - Dagsomsättning
                   </h4>
                   <div style={{ paddingLeft: "16px", fontSize: "13px" }}>
-                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>Grön ≥1.0%</span> = Hög likviditet, lätt att köpa/sälja ✅</div>
-                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>Blå 0.3-1.0%</span> = OK likviditet</div>
-                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#94a3b8", fontWeight: "600" }}>Ljusgrå &lt;0.3%</span> = Låg likviditet, risk för spread</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#16a34a", fontWeight: "600" }}>Grön ≥100 MSEK</span> = Hög likviditet, lätt att köpa/sälja ✅</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>Blå 30-100 MSEK</span> = OK likviditet</div>
+                    <div style={{ marginBottom: "4px" }}><span style={{ color: "#94a3b8", fontWeight: "600" }}>Ljusgrå &lt;30 MSEK</span> = Låg likviditet, risk för spread</div>
+                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>
+                      Beräknas som: Dagens pris × Dagens volym / 1 000 000
+                    </div>
                   </div>
                 </div>
 
