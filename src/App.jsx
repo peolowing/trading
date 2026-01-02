@@ -11,7 +11,7 @@ import {
   YAxis
 } from "recharts";
 import TradeChart from "./components/TradeChart";
-import Dashboard from "./components/Dashboard";
+import Cockpit from "./components/Dashboard";
 import PositionDetail from "./components/PositionDetail";
 import ClosedPositions from "./components/ClosedPositions";
 import ClosedPositionDetail from "./components/ClosedPositionDetail";
@@ -305,10 +305,10 @@ export default function App() {
     return <AuthModal onClose={() => {}} />;
   }
 
-  // Render Dashboard as default view
+  // Render Cockpit as default view
   if (currentView === "dashboard") {
     return (
-      <Dashboard
+      <Cockpit
         onSelectStock={(ticker) => {
           setSelectedStock(ticker);
           setCurrentView("analysis");
@@ -387,7 +387,7 @@ export default function App() {
       <div className="container">
         <p>{error}</p>
         <button onClick={loadData}>Försök igen</button>
-        <button onClick={() => setCurrentView("dashboard")}>← Tillbaka till Dashboard</button>
+        <button onClick={() => setCurrentView("dashboard")}>← Tillbaka till Trading Cockpit</button>
       </div>
     );
   }
@@ -443,7 +443,7 @@ export default function App() {
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button className="ghost" onClick={() => setCurrentView("dashboard")}>
-            ← Dashboard
+            ← Trading Cockpit
           </button>
           <button className="ghost" onClick={() => setLearnMode(v => !v)}>
             {learnMode ? "Stäng lär-läge" : "Lär-läge"}

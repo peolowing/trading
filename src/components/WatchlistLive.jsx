@@ -134,7 +134,7 @@ function WatchlistLive({ onBack }) {
             Din bevakningslista är tom
           </p>
           <p style={{ fontSize: "14px", color: "#9ca3af" }}>
-            Lägg till aktier från Dashboard eller Agents för att se live-data här
+            Lägg till aktier från Trading Cockpit eller Agents för att se live-data här
           </p>
         </div>
       ) : (

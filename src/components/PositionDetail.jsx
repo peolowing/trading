@@ -348,7 +348,7 @@ export default function PositionDetail({ ticker, onBack }) {
           <p style={{ color: "#64748b", textAlign: "center", padding: "40px" }}>
             Position {ticker} hittades inte.
           </p>
-          <button className="ghost" onClick={onBack}>← Tillbaka till Dashboard</button>
+          <button className="ghost" onClick={onBack}>← Tillbaka till Trading Cockpit</button>
         </div>
       </div>
     );
@@ -454,7 +454,7 @@ export default function PositionDetail({ ticker, onBack }) {
 
         <div style={{ display: "flex", gap: "8px" }}>
           <button className="ghost" onClick={onBack}>
-            ← Dashboard
+            ← Trading Cockpit
           </button>
           {!isExited && (
             <button

@@ -186,7 +186,7 @@ export default function ClosedPositions({ onSelectPosition, onBack }) {
               cursor: "pointer"
             }}
           >
-            ← Dashboard
+            ← Trading Cockpit
           </button>
         </div>
       </header>

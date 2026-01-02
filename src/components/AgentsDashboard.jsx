@@ -135,7 +135,7 @@ function AgentsDashboard({ onBack }) {
               cursor: "pointer",
             }}
           >
-            ← Tillbaka till Dashboard
+            ← Tillbaka till Trading Cockpit
           </button>
         )}
       </div>

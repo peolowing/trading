@@ -274,7 +274,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
       <header className="header">
         <div>
           <p className="eyebrow">Veckotrading AI</p>
-          <h1>📈 Dashboard</h1>
+          <h1>🎯 Trading Cockpit</h1>
           {user && (
             <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
               {user.email}
