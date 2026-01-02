@@ -1620,11 +1620,15 @@ app.get("/api/watchlist/live", async (req, res) => {
           let marketCap = quote.marketCap;
           if (!marketCap) {
             try {
+              console.log(`Fetching marketCap from quoteSummary for ${ticker}...`);
               const summary = await yahooFinance.quoteSummary(ticker, { modules: ['summaryDetail', 'price'] });
               marketCap = summary?.price?.marketCap || summary?.summaryDetail?.marketCap;
+              console.log(`marketCap from quoteSummary for ${ticker}:`, marketCap);
             } catch (summaryError) {
               console.warn(`Could not fetch marketCap for ${ticker}:`, summaryError.message);
             }
+          } else {
+            console.log(`marketCap from quote for ${ticker}:`, marketCap);
           }
 
           quotes[ticker] = {
