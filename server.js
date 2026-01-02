@@ -1615,6 +1615,18 @@ app.get("/api/watchlist/live", async (req, res) => {
       tickerList.map(async (ticker) => {
         try {
           const quote = await yahooFinance.quote(ticker);
+
+          // Try to get marketCap from quoteSummary if not available in quote
+          let marketCap = quote.marketCap;
+          if (!marketCap) {
+            try {
+              const summary = await yahooFinance.quoteSummary(ticker, { modules: ['summaryDetail', 'price'] });
+              marketCap = summary?.price?.marketCap || summary?.summaryDetail?.marketCap;
+            } catch (summaryError) {
+              console.warn(`Could not fetch marketCap for ${ticker}:`, summaryError.message);
+            }
+          }
+
           quotes[ticker] = {
             regularMarketPrice: quote.regularMarketPrice,
             regularMarketChange: quote.regularMarketChange,
@@ -1628,7 +1640,7 @@ app.get("/api/watchlist/live", async (req, res) => {
             currency: quote.currency,
             longName: quote.longName,
             shortName: quote.shortName,
-            marketCap: quote.marketCap,
+            marketCap: marketCap,
           };
         } catch (e) {
           console.warn(`Failed to fetch quote for ${ticker}:`, e.message);
