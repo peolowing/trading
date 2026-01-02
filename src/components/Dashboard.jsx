@@ -1711,6 +1711,31 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     <strong>Mindre brus:</strong> EMA slopes beräknas över 5 dagar (ej 1 dag)
                   </div>
 
+                  <div style={{ background: "#f0fdf4", padding: "12px", borderRadius: "6px", marginBottom: "12px", border: "1px solid #86efac" }}>
+                    <strong style={{ color: "#15803d" }}>📚 Vad betyder "Högre låg-struktur"?</strong><br/>
+                    <div style={{ marginTop: "8px", fontSize: "13px", color: "#166534", lineHeight: "1.6" }}>
+                      En <strong>högre låg-struktur</strong> (higher lows) är ett klassiskt tecken på en hälsosam upptrend:<br/>
+                      <br/>
+                      <strong>✅ Frisk upptrend - Högre lows:</strong><br/>
+                      • Varje pullback/dip stannar vid en <em>högre</em> nivå än föregående<br/>
+                      • Exempel: Low₁ = 85 kr → Low₂ = 87 kr → Low₃ = 89 kr<br/>
+                      • Visar att köpare kommer in vid högre och högre priser<br/>
+                      • Support-nivåer höjs successivt = stark trend<br/>
+                      <br/>
+                      <strong>❌ Saknar högre låg-struktur:</strong><br/>
+                      • Senaste dip gick <em>djupare</em> än föregående<br/>
+                      • Exempel: Low₁ = 85 kr → Low₂ = 83 kr (lägre!)<br/>
+                      • Visar att trenden försvagas<br/>
+                      • Risk för trendbrott eller sidledes rörelse<br/>
+                      <br/>
+                      <strong>🔍 Teknisk detektion (Pivot Lows):</strong><br/>
+                      Systemet hittar <em>swing lows</em> - lows som är lägre än 2 dagar före OCH 2 dagar efter. För att godkännas måste senaste pivot low vara högre än föregående pivot low.<br/>
+                      <br/>
+                      <strong>⚠️ "Trend för svag för reclaim: Saknar högre låg-struktur"</strong><br/>
+                      Detta betyder att även om priset är nära EMA20, så saknas grundläggande trendstyrka. Vänta tills aktien bildar en ny, högre pivot low innan du handlar!
+                    </div>
+                  </div>
+
                   <div style={{ background: "#fef3c7", padding: "8px 12px", borderRadius: "6px", marginBottom: "12px" }}>
                     <strong>🔥 FAS 1 - Statistisk Robusthet:</strong><br/>
                     <strong>Edge confidence:</strong> Justerad edge_score baserat på antal trades (kräver ≥30 trades)<br/>
