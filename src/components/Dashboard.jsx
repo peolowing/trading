@@ -1092,6 +1092,13 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                                   <div><strong>Edge Score:</strong> <span style={{ color: item.edge_score >= 70 ? "#16a34a" : item.edge_score >= 50 ? "#f59e0b" : "#64748b", fontWeight: "600" }}>{item.edge_score || "—"}</span></div>
                                   <div><strong>Dagar i lista:</strong> {item.days_in_watchlist || 0}</div>
                                 </div>
+                                {item.status_reason && (item.current_status === "INVALIDATED" || item.current_status === "BREAKOUT_ONLY") && (
+                                  <div style={{ marginTop: "12px", padding: "12px", background: "#fef2f2", borderRadius: "6px", border: "1px solid #fecaca" }}>
+                                    <div style={{ fontSize: "13px", color: "#991b1b", lineHeight: "1.6" }}>
+                                      <strong>ℹ️ Status-anledning:</strong> {item.status_reason}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Vad som är BRA */}
