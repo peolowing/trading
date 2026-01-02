@@ -1006,11 +1006,21 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <span style={{
                             color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#3b82f6" : "#94a3b8",
-                            fontWeight: "500"
+                            fontWeight: "500",
+                            fontSize: "13px"
                           }}
-                          title={`Dagsomsättning: ${turnoverMSEK ? turnoverMSEK.toFixed(0) : '—'} miljoner SEK${relativeTurnover ? ` (${relativeTurnover.toFixed(2)}% av börsvärde)` : ''}`}
+                          title={`Dagsomsättning: ${turnoverMSEK ? turnoverMSEK.toFixed(0) : '—'} miljoner SEK${relativeTurnover ? ` (${relativeTurnover.toFixed(3)}% av börsvärde)` : ''}`}
                           >
-                            {turnoverMSEK ? `${turnoverMSEK.toFixed(0)}${relativeTurnover ? ` (${relativeTurnover.toFixed(2)}%)` : ''}` : "—"}
+                            {turnoverMSEK ? (
+                              <>
+                                {turnoverMSEK.toFixed(0)}
+                                {relativeTurnover && (
+                                  <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "4px" }}>
+                                    ({relativeTurnover.toFixed(3)}%)
+                                  </span>
+                                )}
+                              </>
+                            ) : "—"}
                           </span>
                         </td>
 
