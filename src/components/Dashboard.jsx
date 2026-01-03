@@ -75,6 +75,18 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
       const tickers = stocks.map(s => s.ticker).join(",");
       const res = await fetch(`/api/watchlist/live?tickers=${tickers}`);
       const data = await res.json();
+
+      // Check if any quotes have rate limiting
+      if (data.quotes) {
+        const rateLimitedTickers = Object.entries(data.quotes)
+          .filter(([_, quote]) => quote.rateLimited)
+          .map(([ticker, _]) => ticker);
+
+        if (rateLimitedTickers.length > 0) {
+          alert(`Yahoo Finance rate limit nådd för: ${rateLimitedTickers.join(', ')}. Vänta några timmar eller använd cachad data.`);
+        }
+      }
+
       setLiveData(data.quotes || {});
     } catch (e) {
       console.error("Live data error:", e);
@@ -104,7 +116,14 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     try {
       const res = await fetch("/api/screener");
       const data = await res.json();
-      setScreenerData(data.stocks || []);
+
+      // Check if rate limited
+      if (data.rateLimited || data.error?.includes('rate limit')) {
+        alert(data.error || 'Yahoo Finance rate limit nådd. Vänta några timmar eller använd cachad data.');
+        setScreenerData([]);
+      } else {
+        setScreenerData(data.stocks || []);
+      }
     } catch (e) {
       console.error("Screener error:", e);
     } finally {

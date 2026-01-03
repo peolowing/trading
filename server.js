@@ -28,6 +28,18 @@ dotenv.config({ path: ".env.local" });
 const app = express();
 const PORT = 3002;
 
+// Helper to detect Yahoo Finance rate limiting
+function isRateLimited(error) {
+  const errorMsg = error?.message || '';
+  return errorMsg.includes('Too Many Requests') ||
+         errorMsg.includes('429') ||
+         errorMsg.includes('is not valid JSON');
+}
+
+function getRateLimitMessage() {
+  return 'Yahoo Finance rate limit nådd. Vänta några timmar eller använd cachad data.';
+}
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -660,6 +672,12 @@ app.post("/api/analyze", async (req, res) => {
     });
   } catch (error) {
     console.error("Error in /api/analyze:", error);
+    if (isRateLimited(error)) {
+      return res.status(503).json({
+        error: getRateLimitMessage(),
+        rateLimited: true
+      });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -1156,6 +1174,15 @@ app.get("/api/screener", async (req, res) => {
           bucket // LARGE_CAP eller MID_CAP
         });
       } catch (e) {
+        if (isRateLimited(e)) {
+          console.error(`Rate limit hit for ${ticker}:`, e.message);
+          // Return error to client immediately when rate limited
+          return res.status(503).json({
+            error: getRateLimitMessage(),
+            rateLimited: true,
+            ticker
+          });
+        }
         console.warn(`Skipping ${ticker}:`, e.message);
         results.push(null);
       }
@@ -1707,8 +1734,16 @@ app.get("/api/watchlist/live", async (req, res) => {
             marketCap: marketCap,
           };
         } catch (e) {
-          console.warn(`Failed to fetch quote for ${ticker}:`, e.message);
-          quotes[ticker] = { error: "Failed to fetch" };
+          if (isRateLimited(e)) {
+            console.error(`Rate limit hit for ${ticker}:`, e.message);
+            quotes[ticker] = {
+              error: getRateLimitMessage(),
+              rateLimited: true
+            };
+          } else {
+            console.warn(`Failed to fetch quote for ${ticker}:`, e.message);
+            quotes[ticker] = { error: "Failed to fetch" };
+          }
         }
       })
     );
