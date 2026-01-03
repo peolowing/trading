@@ -1610,25 +1610,69 @@ app.get("/api/watchlist/live", async (req, res) => {
     const tickerList = tickers.split(',').map(t => t.trim());
     const quotes = {};
 
+    // Fetch cached marketCap data for all tickers at once
+    let cachedMetadata = {};
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('stock_metadata')
+          .select('ticker, market_cap, currency, exchange, last_updated')
+          .in('ticker', tickerList);
+
+        if (data) {
+          cachedMetadata = Object.fromEntries(
+            data.map(item => [item.ticker, item])
+          );
+        }
+      } catch (err) {
+        console.warn('Could not fetch cached metadata:', err.message);
+      }
+    }
+
     // Fetch quote for each ticker
     await Promise.all(
       tickerList.map(async (ticker) => {
         try {
           const quote = await yahooFinance.quote(ticker);
 
-          // Try to get marketCap from quoteSummary if not available in quote
-          let marketCap = quote.marketCap;
-          if (!marketCap) {
-            try {
-              console.log(`Fetching marketCap from quoteSummary for ${ticker}...`);
-              const summary = await yahooFinance.quoteSummary(ticker, { modules: ['summaryDetail', 'price'] });
-              marketCap = summary?.price?.marketCap || summary?.summaryDetail?.marketCap;
-              console.log(`marketCap from quoteSummary for ${ticker}:`, marketCap);
-            } catch (summaryError) {
-              console.warn(`Could not fetch marketCap for ${ticker}:`, summaryError.message);
-            }
+          // Try to get marketCap: 1) from cache, 2) from quote, 3) from quoteSummary
+          let marketCap = null;
+          const cached = cachedMetadata[ticker];
+          const cacheAge = cached ? Date.now() - new Date(cached.last_updated).getTime() : Infinity;
+          const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+          if (cached && cacheAge < CACHE_TTL) {
+            // Use cached value if less than 7 days old
+            marketCap = cached.market_cap;
           } else {
-            console.log(`marketCap from quote for ${ticker}:`, marketCap);
+            // Try to fetch fresh marketCap
+            marketCap = quote.marketCap;
+
+            if (!marketCap) {
+              try {
+                const summary = await yahooFinance.quoteSummary(ticker, { modules: ['summaryDetail', 'price'] });
+                marketCap = summary?.price?.marketCap || summary?.summaryDetail?.marketCap;
+              } catch (summaryError) {
+                console.warn(`Could not fetch marketCap for ${ticker}:`, summaryError.message);
+              }
+            }
+
+            // Save to cache if we got a value
+            if (marketCap && supabase) {
+              try {
+                await supabase
+                  .from('stock_metadata')
+                  .upsert({
+                    ticker,
+                    market_cap: marketCap,
+                    currency: quote.currency,
+                    exchange: quote.exchange || quote.exchangeName,
+                    last_updated: new Date().toISOString()
+                  }, { onConflict: 'ticker' });
+              } catch (err) {
+                console.warn(`Could not cache metadata for ${ticker}:`, err.message);
+              }
+            }
           }
 
           quotes[ticker] = {

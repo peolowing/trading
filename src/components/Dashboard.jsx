@@ -1002,25 +1002,15 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           </span>
                         </td>
 
-                        {/* Omsättning (Absolut i MSEK och procent) */}
+                        {/* Omsättning (Absolut i MSEK) */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.ticker); }}>
                           <span style={{
                             color: turnoverMSEK >= 100 ? "#16a34a" : turnoverMSEK >= 30 ? "#3b82f6" : "#94a3b8",
-                            fontWeight: "500",
-                            fontSize: "13px"
+                            fontWeight: "500"
                           }}
-                          title={`Dagsomsättning: ${turnoverMSEK ? turnoverMSEK.toFixed(0) : '—'} miljoner SEK${relativeTurnover ? ` (${relativeTurnover.toFixed(3)}% av börsvärde)` : ''}`}
+                          title={`Dagsomsättning: ${turnoverMSEK ? turnoverMSEK.toFixed(0) : '—'} miljoner SEK`}
                           >
-                            {turnoverMSEK ? (
-                              <>
-                                {turnoverMSEK.toFixed(0)}
-                                {relativeTurnover && (
-                                  <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "4px" }}>
-                                    ({relativeTurnover.toFixed(3)}%)
-                                  </span>
-                                )}
-                              </>
-                            ) : "—"}
+                            {turnoverMSEK ? turnoverMSEK.toFixed(0) : "—"}
                           </span>
                         </td>
 
@@ -1187,7 +1177,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
             {/* Info section below table */}
             <div style={{ marginTop: "16px", fontSize: "12px", color: "#64748b", display: "flex", flexDirection: "column", gap: "8px" }}>
               <div>
-                <strong>Oms. (MSEK):</strong> Dagsomsättning i miljoner SEK (pris × volym), med procent av börsvärde i parantes.
+                <strong>Oms. (MSEK):</strong> Dagsomsättning i miljoner SEK (pris × volym).
                 <span style={{ color: "#16a34a", fontWeight: "600" }}> ≥100 MSEK = Hög likviditet</span>,
                 <span style={{ color: "#3b82f6", fontWeight: "600" }}> 30-100 MSEK = OK</span>,
                 <span style={{ color: "#94a3b8", fontWeight: "600" }}> &lt;30 MSEK = Låg</span>
@@ -1526,10 +1516,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     <div style={{ marginBottom: "4px" }}><span style={{ color: "#3b82f6", fontWeight: "600" }}>Blå 30-100 MSEK</span> = OK likviditet</div>
                     <div style={{ marginBottom: "4px" }}><span style={{ color: "#94a3b8", fontWeight: "600" }}>Ljusgrå &lt;30 MSEK</span> = Låg likviditet, risk för spread</div>
                     <div style={{ marginTop: "8px", fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>
-                      Visar: <strong>Dagsomsättning i MSEK</strong> (pris × volym) och <strong>procent i parantes</strong> (omsättning ÷ börsvärde × 100)
-                    </div>
-                    <div style={{ marginTop: "6px", fontSize: "12px", color: "#64748b" }}>
-                      <strong>Procent-guide:</strong> 0.05-0.20% = Normalt för stora bolag, 0.20-0.50% = Bra likviditet, 0.50-1.0% = Hög aktivitet, &gt;1.0% = Mycket hög aktivitet
+                      Beräknas som: Dagens pris × Dagens volym / 1 000 000
                     </div>
                   </div>
                 </div>
