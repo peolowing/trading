@@ -1036,114 +1036,130 @@ app.get("/api/screener", async (req, res) => {
       stocksWithBucket = UNIVERSE_SE.map(t => ({ ticker: t, bucket: "UNKNOWN" }));
     }
 
-    const results = await Promise.all(
-      stocksWithBucket.map(async ({ ticker, bucket }) => {
-        try {
-          const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
+    // Process stocks sequentially with delay to avoid Yahoo Finance rate limiting
+    const results = [];
+    for (let i = 0; i < stocksWithBucket.length; i++) {
+      const { ticker, bucket } = stocksWithBucket[i];
 
-          // Try to get cached market data first
-          let cachedData = await getMarketData(ticker, startDate);
-          const needsFetch = !cachedData || cachedData.length === 0 ||
-                            !cachedData.some(c => c.date === today);
+      // Add delay between requests (except for first one)
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+      }
 
-          let candles;
-          if (needsFetch) {
-            console.log(`Fetching fresh data for ${ticker} from Yahoo Finance...`);
-            const data = await yahooFinance.historical(ticker, {
-              period1: startDate,
-              interval: "1d"
-            });
+      try {
+        const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
 
-            if (!data || data.length < 50) return null;
+        // Try to get cached market data first
+        let cachedData = await getMarketData(ticker, startDate);
+        const needsFetch = !cachedData || cachedData.length === 0 ||
+                          !cachedData.some(c => c.date === today);
 
-            candles = data.map(d => ({
-              date: dayjs(d.date).format('YYYY-MM-DD'),
-              open: d.open,
-              high: d.high,
-              low: d.low,
-              close: d.close,
-              volume: d.volume
-            }));
-
-            await saveMarketData(ticker, candles);
-          } else {
-            candles = cachedData;
-          }
-
-          if (candles.length < 50) return null;
-
-          // Apply hard volume filters
-          const passesFilters = passesVolumeFilter(candles);
-          if (!passesFilters) return null; // Filtreras bort
-
-          // Bucket comes from database (Nasdaq Stockholm list classification)
-          // bucket is already available from the map parameter
-
-          // Beräkna features för ranking
-          const features = computeFeatures(candles);
-
-          // STEG 2: Beräkna edge score (0-100) med justerade vikter
-          const edgeScore = computeRanking(features, candles, bucket);
-
-          // Beräkna övrig data för UI
-          const closes = candles.map(c => c.close);
-          const highs = candles.map(c => c.high);
-          const lows = candles.map(c => c.low);
-          const volumes = candles.map(c => c.volume);
-
-          const ema20Result = EMA.calculate({ period: 20, values: closes });
-          const ema50Result = EMA.calculate({ period: 50, values: closes });
-          const rsi14Result = RSI.calculate({ period: 14, values: closes });
-          const atr14Result = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 });
-
-          const lastEma20 = ema20Result[ema20Result.length - 1];
-          const lastEma50 = ema50Result[ema50Result.length - 1];
-          const lastRsi = rsi14Result[rsi14Result.length - 1];
-          const lastAtr = atr14Result[atr14Result.length - 1];
-          const lastClose = closes[closes.length - 1];
-          const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-          const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
-
-          let regime = "Consolidation";
-          if (lastEma20 > lastEma50 && lastClose > lastEma20) regime = "Bullish Trend";
-          else if (lastEma20 < lastEma50 && lastClose < lastEma20) regime = "Bearish Trend";
-
-          const setup = detectStrategy({
-            ema20: lastEma20,
-            ema50: lastEma50,
-            rsi14: lastRsi,
-            relativeVolume,
-            regime,
-            close: lastClose,
-            high: highs[highs.length - 1],
-            low: lows[lows.length - 1]
+        let candles;
+        if (needsFetch) {
+          console.log(`Fetching fresh data for ${ticker} from Yahoo Finance...`);
+          const data = await yahooFinance.historical(ticker, {
+            period1: startDate,
+            interval: "1d"
           });
 
-          // Calculate turnover in MSEK
-          const lastVolume = candles.at(-1).volume;
-          const turnoverMSEK = (lastClose * lastVolume) / 1_000_000;
+          if (!data || data.length < 50) {
+            results.push(null);
+            continue;
+          }
 
-          return {
-            ticker,
-            price: lastClose,
-            volume: lastVolume,
-            turnoverMSEK: parseFloat(turnoverMSEK.toFixed(1)),
-            ema20: lastEma20,
-            ema50: lastEma50,
-            rsi: lastRsi,
-            atr: lastAtr,
-            relativeVolume,
-            regime,
-            setup,
-            edgeScore, // Nu 0-100 istället för 0-10
-            bucket // LARGE_CAP eller MID_CAP
-          };
-        } catch (e) {
-          console.warn(`Skipping ${ticker}:`, e.message);
-          return null;
+          candles = data.map(d => ({
+            date: dayjs(d.date).format('YYYY-MM-DD'),
+            open: d.open,
+            high: d.high,
+            low: d.low,
+            close: d.close,
+            volume: d.volume
+          }));
+
+          await saveMarketData(ticker, candles);
+        } else {
+          candles = cachedData;
         }
-      })
-    );
+
+        if (candles.length < 50) {
+          results.push(null);
+          continue;
+        }
+
+        // Apply hard volume filters
+        const passesFilters = passesVolumeFilter(candles);
+        if (!passesFilters) {
+          results.push(null);
+          continue;
+        }
+
+        // Bucket comes from database (Nasdaq Stockholm list classification)
+        // bucket is already available from the map parameter
+
+        // Beräkna features för ranking
+        const features = computeFeatures(candles);
+
+        // STEG 2: Beräkna edge score (0-100) med justerade vikter
+        const edgeScore = computeRanking(features, candles, bucket);
+
+        // Beräkna övrig data för UI
+        const closes = candles.map(c => c.close);
+        const highs = candles.map(c => c.high);
+        const lows = candles.map(c => c.low);
+        const volumes = candles.map(c => c.volume);
+
+        const ema20Result = EMA.calculate({ period: 20, values: closes });
+        const ema50Result = EMA.calculate({ period: 50, values: closes });
+        const rsi14Result = RSI.calculate({ period: 14, values: closes });
+        const atr14Result = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 });
+
+        const lastEma20 = ema20Result[ema20Result.length - 1];
+        const lastEma50 = ema50Result[ema50Result.length - 1];
+        const lastRsi = rsi14Result[rsi14Result.length - 1];
+        const lastAtr = atr14Result[atr14Result.length - 1];
+        const lastClose = closes[closes.length - 1];
+        const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
+
+        let regime = "Consolidation";
+        if (lastEma20 > lastEma50 && lastClose > lastEma20) regime = "Bullish Trend";
+        else if (lastEma20 < lastEma50 && lastClose < lastEma20) regime = "Bearish Trend";
+
+        const setup = detectStrategy({
+          ema20: lastEma20,
+          ema50: lastEma50,
+          rsi14: lastRsi,
+          relativeVolume,
+          regime,
+          close: lastClose,
+          high: highs[highs.length - 1],
+          low: lows[lows.length - 1]
+        });
+
+        // Calculate turnover in MSEK
+        const lastVolume = candles.at(-1).volume;
+        const turnoverMSEK = (lastClose * lastVolume) / 1_000_000;
+
+        results.push({
+          ticker,
+          price: lastClose,
+          volume: lastVolume,
+          turnoverMSEK: parseFloat(turnoverMSEK.toFixed(1)),
+          ema20: lastEma20,
+          ema50: lastEma50,
+          rsi: lastRsi,
+          atr: lastAtr,
+          relativeVolume,
+          regime,
+          setup,
+          edgeScore, // Nu 0-100 istället för 0-10
+          bucket // LARGE_CAP eller MID_CAP
+        });
+      } catch (e) {
+        console.warn(`Skipping ${ticker}:`, e.message);
+        results.push(null);
+      }
+    }
 
     // STEG 3: Deterministisk bucket selection - alltid 20+20
     const candidates = results.filter(r => r !== null);
