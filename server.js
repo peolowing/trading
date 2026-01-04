@@ -40,6 +40,12 @@ function getRateLimitMessage() {
   return 'Yahoo Finance rate limit nådd. Vänta några timmar eller använd cachad data.';
 }
 
+function logRateLimit(ticker, endpoint) {
+  const timestamp = new Date().toISOString();
+  console.log(`[RATE LIMIT] ${timestamp} - Endpoint: ${endpoint}, Ticker: ${ticker}`);
+  console.log(`[RATE LIMIT] Yahoo Finance har blockerat requests. Använder cachad data om tillgängligt.`);
+}
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -673,6 +679,8 @@ app.post("/api/analyze", async (req, res) => {
   } catch (error) {
     console.error("Error in /api/analyze:", error);
     if (isRateLimited(error)) {
+      const ticker = req.body?.ticker || 'UNKNOWN';
+      logRateLimit(ticker, 'analyze');
       return res.status(503).json({
         error: getRateLimitMessage(),
         rateLimited: true
@@ -1175,7 +1183,7 @@ app.get("/api/screener", async (req, res) => {
         });
       } catch (e) {
         if (isRateLimited(e)) {
-          console.error(`Rate limit hit for ${ticker}:`, e.message);
+          logRateLimit(ticker, 'screener');
           // Return error to client immediately when rate limited
           return res.status(503).json({
             error: getRateLimitMessage(),
@@ -1735,7 +1743,7 @@ app.get("/api/watchlist/live", async (req, res) => {
           };
         } catch (e) {
           if (isRateLimited(e)) {
-            console.error(`Rate limit hit for ${ticker}:`, e.message);
+            logRateLimit(ticker, 'watchlist/live');
             quotes[ticker] = {
               error: getRateLimitMessage(),
               rateLimited: true
