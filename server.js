@@ -6,6 +6,13 @@ import { EMA, SMA, RSI, ATR } from "technicalindicators";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+
+// Configure yahoo-finance2 with custom user agent to reduce rate limiting
+yahooFinance.setGlobalConfig({
+  queue: {
+    timeout: 60000  // 60 second timeout for requests
+  }
+});
 import { updateWatchlistStatus, buildWatchlistInput } from "./lib/watchlistLogic.js";
 import {
   portfolioRepo,
@@ -440,30 +447,48 @@ app.post("/api/analyze", async (req, res) => {
 
       // Try to get cached market data first
       let cachedData = await getMarketData(ticker, startDate);
-      const needsFetch = !cachedData || cachedData.length === 0 ||
-                        !cachedData.some(c => c.date === today);
+
+      // Calculate age of cached data
+      const latestCachedDate = cachedData && cachedData.length > 0
+        ? dayjs(cachedData[cachedData.length - 1].date)
+        : null;
+      const cacheAge = latestCachedDate ? dayjs().diff(latestCachedDate, 'day') : Infinity;
+
+      // Accept cached data up to 7 days old
+      const CACHE_STALE_DAYS = 7;
+      const needsFetch = !cachedData || cachedData.length === 0 || cacheAge > CACHE_STALE_DAYS;
 
       if (needsFetch) {
-        console.log(`Fetching fresh data for ${ticker} from Yahoo Finance...`);
-        const rawCandles = await yahooFinance.chart(ticker, {
-          period1: startDate,
-          period2: today
-        });
+        console.log(`Fetching fresh data for ${ticker} from Yahoo Finance (cache age: ${cacheAge} days)...`);
+        try {
+          const rawCandles = await yahooFinance.chart(ticker, {
+            period1: startDate,
+            period2: today
+          });
 
-        candles = rawCandles.quotes.map(q => ({
-          date: dayjs(q.date).format('YYYY-MM-DD'),
-          open: q.open,
-          high: q.high,
-          low: q.low,
-          close: q.close,
-          volume: q.volume,
-          adjClose: q.adjclose || q.close
-        }));
+          candles = rawCandles.quotes.map(q => ({
+            date: dayjs(q.date).format('YYYY-MM-DD'),
+            open: q.open,
+            high: q.high,
+            low: q.low,
+            close: q.close,
+            volume: q.volume,
+            adjClose: q.adjclose || q.close
+          }));
 
-        // Save to cache
-        await saveMarketData(ticker, candles);
+          // Save to cache
+          await saveMarketData(ticker, candles);
+        } catch (fetchError) {
+          // If fetch fails but we have stale cached data, use it
+          if (cachedData && cachedData.length >= 50) {
+            console.log(`Fetch failed, using stale cache for ${ticker} (${cacheAge} days old)`);
+            candles = cachedData;
+          } else {
+            throw fetchError; // Re-throw if no usable cache
+          }
+        }
       } else {
-        console.log(`Using cached data for ${ticker}`);
+        console.log(`Using fresh cache for ${ticker} (${cacheAge} days old)`);
         candles = cachedData;
       }
     }
@@ -1077,33 +1102,48 @@ app.get("/api/screener", async (req, res) => {
 
         // Try to get cached market data first
         let cachedData = await getMarketData(ticker, startDate);
-        const needsFetch = !cachedData || cachedData.length === 0 ||
-                          !cachedData.some(c => c.date === today);
+
+        // Calculate age of cached data
+        const latestCachedDate = cachedData && cachedData.length > 0
+          ? dayjs(cachedData[cachedData.length - 1].date)
+          : null;
+        const cacheAge = latestCachedDate ? dayjs().diff(latestCachedDate, 'day') : Infinity;
+
+        // Accept cached data up to 7 days old
+        const CACHE_STALE_DAYS = 7;
+        const needsFetch = !cachedData || cachedData.length === 0 || cacheAge > CACHE_STALE_DAYS;
 
         let candles;
         if (needsFetch) {
-          console.log(`Fetching fresh data for ${ticker} from Yahoo Finance...`);
+          console.log(`Fetching fresh data for ${ticker} from Yahoo Finance (cache age: ${cacheAge} days)...`);
           const data = await yahooFinance.historical(ticker, {
             period1: startDate,
             interval: "1d"
           });
 
           if (!data || data.length < 50) {
-            results.push(null);
-            continue;
+            // If fetch fails but we have cached data, use it even if stale
+            if (cachedData && cachedData.length >= 50) {
+              console.log(`Using stale cache for ${ticker} (${cacheAge} days old)`);
+              candles = cachedData;
+            } else {
+              results.push(null);
+              continue;
+            }
+          } else {
+            candles = data.map(d => ({
+              date: dayjs(d.date).format('YYYY-MM-DD'),
+              open: d.open,
+              high: d.high,
+              low: d.low,
+              close: d.close,
+              volume: d.volume
+            }));
+
+            await saveMarketData(ticker, candles);
           }
-
-          candles = data.map(d => ({
-            date: dayjs(d.date).format('YYYY-MM-DD'),
-            open: d.open,
-            high: d.high,
-            low: d.low,
-            close: d.close,
-            volume: d.volume
-          }));
-
-          await saveMarketData(ticker, candles);
         } else {
+          console.log(`Using fresh cache for ${ticker} (${cacheAge} days old)`);
           candles = cachedData;
         }
 
@@ -1179,7 +1219,9 @@ app.get("/api/screener", async (req, res) => {
           regime,
           setup,
           edgeScore, // Nu 0-100 istället för 0-10
-          bucket // LARGE_CAP eller MID_CAP
+          bucket, // LARGE_CAP eller MID_CAP
+          dataAge: cacheAge, // Age of data in days
+          lastDataDate: candles[candles.length - 1].date
         });
       } catch (e) {
         if (isRateLimited(e)) {
