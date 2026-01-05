@@ -1703,68 +1703,101 @@ app.get("/api/watchlist/live", async (req, res) => {
     const tickerList = tickers.split(',').map(t => t.trim());
     const quotes = {};
 
-    // Fetch cached marketCap data for all tickers at once
+    // Fetch cached quotes and metadata for all tickers at once
+    let cachedQuotes = {};
     let cachedMetadata = {};
     if (supabase) {
       try {
+        // Fetch cached quotes (store in stock_metadata with quote fields)
         const { data } = await supabase
           .from('stock_metadata')
-          .select('ticker, market_cap, currency, exchange, last_updated')
+          .select('*')
           .in('ticker', tickerList);
 
         if (data) {
-          cachedMetadata = Object.fromEntries(
+          cachedQuotes = Object.fromEntries(
             data.map(item => [item.ticker, item])
           );
+          cachedMetadata = cachedQuotes; // Same data source
         }
       } catch (err) {
-        console.warn('Could not fetch cached metadata:', err.message);
+        console.warn('Could not fetch cached data:', err.message);
       }
     }
 
-    // Fetch quote for each ticker
-    await Promise.all(
-      tickerList.map(async (ticker) => {
+    const QUOTE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes for quotes
+    const MARKETCAP_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days for marketCap
+
+    // Process tickers sequentially with delay to avoid rate limiting
+    for (let i = 0; i < tickerList.length; i++) {
+      const ticker = tickerList[i];
+
+      // Add delay between requests (except for first one)
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
+      }
+
+      try {
+        // Check if we have recent cached quote
+        const cached = cachedQuotes[ticker];
+        const quoteAge = cached?.quote_last_updated
+          ? Date.now() - new Date(cached.quote_last_updated).getTime()
+          : Infinity;
+
+        // Use cached quote if less than 15 minutes old
+        if (cached && quoteAge < QUOTE_CACHE_TTL) {
+          console.log(`Using cached quote for ${ticker} (${Math.floor(quoteAge / 1000 / 60)} min old)`);
+          quotes[ticker] = {
+            regularMarketPrice: cached.quote_price,
+            regularMarketChange: cached.quote_change,
+            regularMarketChangePercent: cached.quote_change_percent,
+            regularMarketVolume: cached.quote_volume,
+            regularMarketDayHigh: cached.quote_day_high,
+            regularMarketDayLow: cached.quote_day_low,
+            regularMarketOpen: cached.quote_open,
+            regularMarketPreviousClose: cached.quote_prev_close,
+            marketState: cached.quote_market_state,
+            currency: cached.currency,
+            longName: cached.quote_long_name,
+            shortName: cached.quote_short_name,
+            marketCap: cached.market_cap,
+            cached: true
+          };
+          continue;
+        }
+
+        // Fetch fresh quote
         try {
           const quote = await yahooFinance.quote(ticker);
+          const marketCap = quote.marketCap || cached?.market_cap;
 
-          // Try to get marketCap: 1) from cache, 2) from quote, 3) from quoteSummary
-          let marketCap = null;
-          const cached = cachedMetadata[ticker];
-          const cacheAge = cached ? Date.now() - new Date(cached.last_updated).getTime() : Infinity;
-          const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-          if (cached && cacheAge < CACHE_TTL) {
-            // Use cached value if less than 7 days old
-            marketCap = cached.market_cap;
-          } else {
-            // Try to fetch fresh marketCap
-            marketCap = quote.marketCap;
-
-            if (!marketCap) {
-              try {
-                const summary = await yahooFinance.quoteSummary(ticker, { modules: ['summaryDetail', 'price'] });
-                marketCap = summary?.price?.marketCap || summary?.summaryDetail?.marketCap;
-              } catch (summaryError) {
-                console.warn(`Could not fetch marketCap for ${ticker}:`, summaryError.message);
-              }
-            }
-
-            // Save to cache if we got a value
-            if (marketCap && supabase) {
-              try {
-                await supabase
-                  .from('stock_metadata')
-                  .upsert({
-                    ticker,
-                    market_cap: marketCap,
-                    currency: quote.currency,
-                    exchange: quote.exchange || quote.exchangeName,
-                    last_updated: new Date().toISOString()
-                  }, { onConflict: 'ticker' });
-              } catch (err) {
-                console.warn(`Could not cache metadata for ${ticker}:`, err.message);
-              }
+          // Cache the quote data
+          if (supabase) {
+            try {
+              await supabase
+                .from('stock_metadata')
+                .upsert({
+                  ticker,
+                  market_cap: marketCap,
+                  currency: quote.currency,
+                  exchange: quote.exchange || quote.exchangeName,
+                  last_updated: new Date().toISOString(),
+                  // Quote-specific fields
+                  quote_price: quote.regularMarketPrice,
+                  quote_change: quote.regularMarketChange,
+                  quote_change_percent: quote.regularMarketChangePercent,
+                  quote_volume: quote.regularMarketVolume,
+                  quote_day_high: quote.regularMarketDayHigh,
+                  quote_day_low: quote.regularMarketDayLow,
+                  quote_open: quote.regularMarketOpen,
+                  quote_prev_close: quote.regularMarketPreviousClose,
+                  quote_market_state: quote.marketState,
+                  quote_long_name: quote.longName,
+                  quote_short_name: quote.shortName,
+                  quote_last_updated: new Date().toISOString()
+                }, { onConflict: 'ticker' });
+            } catch (err) {
+              console.warn(`Could not cache quote for ${ticker}:`, err.message);
             }
           }
 
@@ -1782,21 +1815,47 @@ app.get("/api/watchlist/live", async (req, res) => {
             longName: quote.longName,
             shortName: quote.shortName,
             marketCap: marketCap,
+            cached: false
           };
         } catch (e) {
           if (isRateLimited(e)) {
             logRateLimit(ticker, 'watchlist/live');
-            quotes[ticker] = {
-              error: getRateLimitMessage(),
-              rateLimited: true
-            };
+            // Fallback to stale cache if available
+            if (cached) {
+              console.log(`Using stale cached quote for ${ticker} (${Math.floor(quoteAge / 1000 / 60)} min old)`);
+              quotes[ticker] = {
+                regularMarketPrice: cached.quote_price,
+                regularMarketChange: cached.quote_change,
+                regularMarketChangePercent: cached.quote_change_percent,
+                regularMarketVolume: cached.quote_volume,
+                regularMarketDayHigh: cached.quote_day_high,
+                regularMarketDayLow: cached.quote_day_low,
+                regularMarketOpen: cached.quote_open,
+                regularMarketPreviousClose: cached.quote_prev_close,
+                marketState: cached.quote_market_state,
+                currency: cached.currency,
+                longName: cached.quote_long_name,
+                shortName: cached.quote_short_name,
+                marketCap: cached.market_cap,
+                cached: true,
+                stale: true
+              };
+            } else {
+              quotes[ticker] = {
+                error: getRateLimitMessage(),
+                rateLimited: true
+              };
+            }
           } else {
             console.warn(`Failed to fetch quote for ${ticker}:`, e.message);
             quotes[ticker] = { error: "Failed to fetch" };
           }
         }
-      })
-    );
+      } catch (tickerError) {
+        console.error(`Error processing ${ticker}:`, tickerError);
+        quotes[ticker] = { error: "Processing error" };
+      }
+    }
 
     res.json({ quotes });
   } catch (e) {
