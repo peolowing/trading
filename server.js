@@ -1,17 +1,18 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
 import { EMA, SMA, RSI, ATR } from "technicalindicators";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
 
-// Configure yahoo-finance2 with custom user agent to reduce rate limiting
-yahooFinance.setGlobalConfig({
+// Initialize yahoo-finance2 v3
+const yahooFinance = new YahooFinanceClass({
   queue: {
     timeout: 60000  // 60 second timeout for requests
-  }
+  },
+  suppressNotices: ['yahooSurvey']
 });
 import { updateWatchlistStatus, buildWatchlistInput } from "./lib/watchlistLogic.js";
 import {
