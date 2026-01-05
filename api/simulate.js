@@ -3,8 +3,14 @@
  * Runs historical backtest simulation showing all trades
  */
 
-import yahooFinance from 'yahoo-finance2';
+import YahooFinanceClass from 'yahoo-finance2';
 import dayjs from 'dayjs';
+
+// Initialize Yahoo Finance v3
+const yahooFinance = new YahooFinanceClass({
+  queue: { timeout: 60000 },
+  suppressNotices: ['yahooSurvey', 'ripHistorical']
+});
 import { EMA, RSI } from 'technicalindicators';
 import { updateWatchlistStatus, buildWatchlistInput } from './utils/watchlistLogic.js';
 
@@ -23,11 +29,12 @@ export default async function handler(req, res) {
     console.log(`[Simulation] ${ticker} from ${startDate} to ${endDate}`);
 
     // Fetch historical data (need extra lookback for indicators)
-    const lookbackStart = dayjs(startDate).subtract(6, 'month').format('YYYY-MM-DD');
+    const lookbackStart = dayjs(startDate).subtract(6, 'month').toDate();
 
     const rawCandles = await yahooFinance.chart(ticker, {
       period1: lookbackStart,
-      period2: endDate
+      period2: dayjs(endDate).toDate(),
+      interval: '1d'
     });
 
     if (!rawCandles || !rawCandles.quotes || rawCandles.quotes.length === 0) {

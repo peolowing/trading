@@ -5,8 +5,14 @@
  */
 
 import { supabase } from '../config/supabase.js';
-import yahooFinance from 'yahoo-finance2';
+import YahooFinanceClass from 'yahoo-finance2';
 import dayjs from 'dayjs';
+
+// Initialize Yahoo Finance v3
+const yahooFinance = new YahooFinanceClass({
+  queue: { timeout: 60000 },
+  suppressNotices: ['yahooSurvey', 'ripHistorical']
+});
 import { EMA, RSI } from 'technicalindicators';
 import { updateWatchlistStatus, buildWatchlistInput } from './utils/watchlistLogic.js';
 

@@ -1,4 +1,10 @@
-import yahooFinance from 'yahoo-finance2';
+import YahooFinanceClass from 'yahoo-finance2';
+
+// Initialize Yahoo Finance v3
+const yahooFinance = new YahooFinanceClass({
+  queue: { timeout: 60000 },
+  suppressNotices: ['yahooSurvey', 'ripHistorical']
+});
 import { EMA, RSI, ATR } from 'technicalindicators';
 import dayjs from 'dayjs';
 import { createClient } from '@supabase/supabase-js';
@@ -385,10 +391,11 @@ export default async function handler(req, res) {
     console.log(`[Cache MISS] ${ticker}`);
 
     // Fetch candles from Yahoo Finance (1 year for calculations)
-    const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
+    const startDate = dayjs().subtract(1, 'year').toDate();
     const rawCandles = await yahooFinance.chart(ticker, {
       period1: startDate,
-      period2: dayjs().format('YYYY-MM-DD')
+      period2: new Date(),
+      interval: '1d'
     });
 
     const candles = rawCandles.quotes.map(q => ({

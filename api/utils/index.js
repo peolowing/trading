@@ -1,8 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
 import { EMA, RSI, ATR, SMA } from "technicalindicators";
+
+// Initialize Yahoo Finance v3
+const yahooFinance = new YahooFinanceClass({
+  queue: { timeout: 60000 },
+  suppressNotices: ['yahooSurvey', 'ripHistorical']
+});
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
@@ -474,10 +480,13 @@ app.get("/api/market-data", async (req, res) => {
 
     if (needsFetch) {
       console.log(`Fetching fresh market data for ${ticker} from Yahoo Finance`);
-      const result = await yahooFinance.historical(ticker, {
-        period1: startDate,
-        period2: dayjs().format('YYYY-MM-DD')
+      const rawResult = await yahooFinance.chart(ticker, {
+        period1: dayjs(startDate).toDate(),
+        period2: new Date(),
+        interval: '1d'
       });
+
+      const result = rawResult?.quotes || [];
 
       if (!result || result.length === 0) {
         return res.status(404).json({ error: "No data from Yahoo Finance" });
@@ -911,10 +920,13 @@ app.get("/api/screener", async (req, res) => {
           let candles;
           if (needsFetch) {
             console.log(`Fetching fresh market data for ${ticker} from Yahoo Finance`);
-            const result = await yahooFinance.historical(ticker, {
-              period1: startDate,
-              period2: today
+            const rawResult = await yahooFinance.chart(ticker, {
+              period1: dayjs(startDate).toDate(),
+              period2: new Date(),
+              interval: '1d'
             });
+
+            const result = rawResult?.quotes || [];
 
             if (!result || result.length === 0) return null;
 
