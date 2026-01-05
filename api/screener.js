@@ -106,8 +106,12 @@ export default async function handler(req, res) {
 
   // GET /api/screener - Main screener
   if (method === 'GET' && pathname === '/api/screener') {
-    // If cached mode requested, return data from database
-    if (useCached) {
+    // DEFAULT: Use cached data (live mode requires ?live=true)
+    // This prevents 504 timeouts on Vercel's 30-second function limit
+    const useLive = url.searchParams.get('live') === 'true';
+
+    if (!useLive) {
+      // Return cached data from database (default behavior)
       try {
         if (!supabase) return res.json({ stocks: [] });
 
@@ -152,7 +156,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // LIVE MODE - Fetch from Yahoo Finance v3
+    // LIVE MODE - Fetch from Yahoo Finance v3 (only when ?live=true)
+    // WARNING: This can take 30+ seconds and may timeout on Vercel
     try {
       if (!supabase) return res.json({ stocks: [] });
 
@@ -248,6 +253,34 @@ export default async function handler(req, res) {
       results.sort((a, b) => b.edgeScore - a.edgeScore);
 
       console.log(`[Screener] Complete: ${results.length}/${dbStocks.length} stocks`);
+
+      // Update cache in database for future requests
+      try {
+        const updates = results.map(stock => ({
+          ticker: stock.ticker,
+          price: stock.price,
+          volume: stock.volume,
+          turnover_msek: stock.turnoverMSEK,
+          ema20: stock.ema20,
+          ema50: stock.ema50,
+          rsi: stock.rsi,
+          atr: stock.atr,
+          relative_volume: stock.relativeVolume,
+          regime: stock.regime,
+          setup: stock.setup,
+          edge_score: stock.edgeScore,
+          last_calculated: new Date().toISOString()
+        }));
+
+        await supabase
+          .from('screener_stocks')
+          .upsert(updates, { onConflict: 'ticker' });
+
+        console.log(`[Screener] Updated cache for ${updates.length} stocks`);
+      } catch (cacheError) {
+        console.error('[Screener] Cache update failed:', cacheError);
+        // Don't fail the request if cache update fails
+      }
 
       return res.json({
         stocks: results,

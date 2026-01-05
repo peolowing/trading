@@ -1,0 +1,305 @@
+======================================================================
+  SIMULATION AV NUVARANDE SCREENER-LISTA (40 AKTIER) - HELÅR 2025
+======================================================================
+
+Period: 2025-01-01 till 2025-12-31
+Strategi: FAS 1 + FAS 2 (READY/BREAKOUT_READY entry, ATR-baserade stops/targets)
+Genererad: 2026-01-01 21:46:17
+
+======================================================================
+
+----------------------------------------
+[VOLV-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 7.90%
+  Edge Score: 0%
+
+----------------------------------------
+[ATCO-A.ST]
+  Antal trades: 2
+  Vinstprocent: 50.0% (1 W / 1 L)
+  Total avkastning: 7.57%
+  Edge Score: 306%
+
+----------------------------------------
+[ATCO-B.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[SAND.ST]
+  Antal trades: 3
+  Vinstprocent: 33.3% (1 W / 2 L)
+  Total avkastning: -4.01%
+  Edge Score: 8%
+
+----------------------------------------
+[ABB.ST]
+  Antal trades: 2
+  Vinstprocent: 100.0% (2 W / 0 L)
+  Total avkastning: 0.96%
+  Edge Score: 0%
+
+----------------------------------------
+[ASSA-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 5.78%
+  Edge Score: 0%
+
+----------------------------------------
+[ERIC-B.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[HM-B.ST]
+  Antal trades: 1
+  Vinstprocent: 0.0% (0 W / 1 L)
+  Total avkastning: -0.63%
+  Edge Score: 0%
+
+----------------------------------------
+[ALIV-SDB.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 0.19%
+  Edge Score: 0%
+
+----------------------------------------
+[SEB-A.ST]
+  Antal trades: 2
+  Vinstprocent: 100.0% (2 W / 0 L)
+  Total avkastning: 2.89%
+  Edge Score: 0%
+
+----------------------------------------
+[SWED-A.ST]
+  Antal trades: 1
+  Vinstprocent: 0.0% (0 W / 1 L)
+  Total avkastning: -1.65%
+  Edge Score: 0%
+
+----------------------------------------
+[SHB-A.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 0.12%
+  Edge Score: 0%
+
+----------------------------------------
+[NDA-SE.ST]
+  Antal trades: 3
+  Vinstprocent: 33.3% (1 W / 2 L)
+  Total avkastning: 6.24%
+  Edge Score: 390%
+
+----------------------------------------
+[INVE-A.ST]
+  Antal trades: 2
+  Vinstprocent: 100.0% (2 W / 0 L)
+  Total avkastning: 2.96%
+  Edge Score: 0%
+
+----------------------------------------
+[INVE-B.ST]
+  Antal trades: 2
+  Vinstprocent: 0.0% (0 W / 2 L)
+  Total avkastning: -3.95%
+  Edge Score: 0%
+
+----------------------------------------
+[KINV-B.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[SKF-B.ST]
+  Antal trades: 2
+  Vinstprocent: 100.0% (2 W / 0 L)
+  Total avkastning: 8.70%
+  Edge Score: 0%
+
+----------------------------------------
+[SSAB-A.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[BOL.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[TELIA.ST]
+  Antal trades: 4
+  Vinstprocent: 50.0% (2 W / 2 L)
+  Total avkastning: -0.30%
+  Edge Score: 48%
+
+----------------------------------------
+[ESSITY-B.ST]
+  Antal trades: 1
+  Vinstprocent: 0.0% (0 W / 1 L)
+  Total avkastning: -0.50%
+  Edge Score: 0%
+
+----------------------------------------
+[ELUX-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 6.03%
+  Edge Score: 0%
+
+----------------------------------------
+[NIBE-B.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[ALFA.ST]
+  Antal trades: 2
+  Vinstprocent: 0.0% (0 W / 2 L)
+  Total avkastning: -3.01%
+  Edge Score: 0%
+
+----------------------------------------
+[HEBA-B.ST]
+  Antal trades: 3
+  Vinstprocent: 33.3% (1 W / 2 L)
+  Total avkastning: -1.33%
+  Edge Score: 30%
+
+----------------------------------------
+[GETI-B.ST]
+  Antal trades: 1
+  Vinstprocent: 0.0% (0 W / 1 L)
+  Total avkastning: -2.07%
+  Edge Score: 0%
+
+----------------------------------------
+[EPI-B.ST]
+  Antal trades: 1
+  Vinstprocent: 0.0% (0 W / 1 L)
+  Total avkastning: -1.51%
+  Edge Score: 0%
+
+----------------------------------------
+[HUSQ-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 9.22%
+  Edge Score: 0%
+
+----------------------------------------
+[INDU-A.ST]
+  Antal trades: 2
+  Vinstprocent: 50.0% (1 W / 1 L)
+  Total avkastning: 2.52%
+  Edge Score: 131%
+
+----------------------------------------
+[LUND-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 2.27%
+  Edge Score: 0%
+
+----------------------------------------
+[SECU-B.ST]
+  Antal trades: 0
+  Vinstprocent: 0.0% (0 W / 0 L)
+  Total avkastning: 0.00%
+  Edge Score: 0%
+
+----------------------------------------
+[AXFO.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 1.45%
+  Edge Score: 0%
+
+----------------------------------------
+[CAST.ST]
+  Antal trades: 1
+  Vinstprocent: 0.0% (0 W / 1 L)
+  Total avkastning: -2.55%
+  Edge Score: 0%
+
+----------------------------------------
+[FABG.ST]
+  Antal trades: 4
+  Vinstprocent: 0.0% (0 W / 4 L)
+  Total avkastning: -7.84%
+  Edge Score: 0%
+
+----------------------------------------
+[LIFCO-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 0.06%
+  Edge Score: 0%
+
+----------------------------------------
+[LOOMIS.ST]
+  Antal trades: 3
+  Vinstprocent: 33.3% (1 W / 2 L)
+  Total avkastning: -1.83%
+  Edge Score: 26%
+
+----------------------------------------
+[NCC-B.ST]
+  Antal trades: 2
+  Vinstprocent: 50.0% (1 W / 1 L)
+  Total avkastning: -0.36%
+  Edge Score: 35%
+
+----------------------------------------
+[PEAB-B.ST]
+  Antal trades: 2
+  Vinstprocent: 50.0% (1 W / 1 L)
+  Total avkastning: 0.23%
+  Edge Score: 61%
+
+----------------------------------------
+[SWEC-B.ST]
+  Antal trades: 2
+  Vinstprocent: 50.0% (1 W / 1 L)
+  Total avkastning: 0.62%
+  Edge Score: 66%
+
+----------------------------------------
+[TREL-B.ST]
+  Antal trades: 1
+  Vinstprocent: 100.0% (1 W / 0 L)
+  Total avkastning: 1.82%
+  Edge Score: 0%
+
+======================================================================
+  SAMMANFATTNING - HELA SCREENER-LISTAN
+======================================================================
+
+Antal aktier simulerade: 40
+Totalt antal trades: 58
+Genomsnittligt antal trades per aktie: 1.4
+
+Total vinstprocent: 50.0% (29 W / 29 L)
+
+TOTAL PORTFÖLJAVKASTNING (kumulativ): 39.52%
+Genomsnittlig avkastning per aktie: 0.99%
+
+======================================================================
+

@@ -1,0 +1,227 @@
+=====================================================================
+TRADING SIMULATOR - TOP 10 LARGE CAP STOCKHOLM 2025
+Period: 2025-01-01 till 2025-12-31
+Strategi: FAS 1+2 (Statistisk robusthet + Strukturförbättringar)
+=====================================================================
+
+---------------------------------------------------------------------
+TICKER: VOLV-B.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      1
+  - Vinstprocent:      100.0%
+  - Total avkastning:  7.90%
+  - Edge score:        0%
+  - Max drawdown:      0.00%
+  - Genomsnitt vinst:  7.90%
+  - Genomsnitt förlust: 0.00%
+
+Trades:
+  [2025-01-10] Entry: 279.20 SEK → Exit: 2025-01-29 301.26 SEK (7.901%, TARGET_HIT)
+
+---------------------------------------------------------------------
+TICKER: ASSA-B.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      1
+  - Vinstprocent:      100.0%
+  - Total avkastning:  5.78%
+  - Edge score:        0%
+  - Max drawdown:      0.00%
+  - Genomsnitt vinst:  5.78%
+  - Genomsnitt förlust: 0.00%
+
+Trades:
+  [2025-10-14] Entry: 331.29 SEK → Exit: 2025-10-21 350.43 SEK (5.776%, TARGET_HIT)
+
+---------------------------------------------------------------------
+TICKER: ABB.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      2
+  - Vinstprocent:      100.0%
+  - Total avkastning:  0.96%
+  - Edge score:        0%
+  - Max drawdown:      0.00%
+  - Genomsnitt vinst:  0.48%
+  - Genomsnitt förlust: 0.00%
+
+Trades:
+  [2025-05-30] Entry: 541.79 SEK → Exit: 2025-06-03 545.40 SEK (0.664%, INVALIDATED)
+  [2025-12-19] Entry: 683 SEK → Exit: 2025-12-22 685 SEK (0.292%, INVALIDATED)
+
+---------------------------------------------------------------------
+TICKER: ATCO-A.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      2
+  - Vinstprocent:      50.0%
+  - Total avkastning:  7.57%
+  - Edge score:        306%
+  - Max drawdown:      1.51%
+  - Genomsnitt vinst:  9.21%
+  - Genomsnitt förlust: 1.51%
+
+Trades:
+  [2025-02-21] Entry: 185.80 SEK → Exit: 2025-02-24 183 SEK (-1.50%, INVALIDATED)
+  [2025-09-16] Entry: 155.44 SEK → Exit: 2025-10-02 169.77 SEK (9.213%, TARGET_HIT)
+
+---------------------------------------------------------------------
+TICKER: SEB-A.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      2
+  - Vinstprocent:      100.0%
+  - Total avkastning:  2.89%
+  - Edge score:        0%
+  - Max drawdown:      0.00%
+  - Genomsnitt vinst:  1.43%
+  - Genomsnitt förlust: 0.00%
+
+Trades:
+  [2025-05-22] Entry: 158.60 SEK → Exit: 2025-05-26 160.80 SEK (1.387%, INVALIDATED)
+  [2025-08-01] Entry: 168.89 SEK → Exit: 2025-08-05 171.39 SEK (1.480%, INVALIDATED)
+
+---------------------------------------------------------------------
+TICKER: HM-B.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      1
+  - Vinstprocent:      0.0%
+  - Total avkastning:  -0.63%
+  - Edge score:        0%
+  - Max drawdown:      0.63%
+  - Genomsnitt vinst:  0.00%
+  - Genomsnitt förlust: 0.63%
+
+Trades:
+  [2025-08-26] Entry: 142.19 SEK → Exit: 2025-08-28 141.30 SEK (-0.63%, INVALIDATED)
+
+---------------------------------------------------------------------
+TICKER: SAND.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      3
+  - Vinstprocent:      33.3%
+  - Total avkastning:  -4.01%
+  - Edge score:        8%
+  - Max drawdown:      4.53%
+  - Genomsnitt vinst:  0.54%
+  - Genomsnitt förlust: 2.29%
+
+Trades:
+  [2025-03-18] Entry: 234.10 SEK → Exit: 2025-03-21 228.10 SEK (-2.56%, INVALIDATED)
+  [2025-06-17] Entry: 213 SEK → Exit: 2025-06-23 208.69 SEK (-2.01%, INVALIDATED)
+  [2025-08-21] Entry: 239 SEK → Exit: 2025-08-27 240.30 SEK (0.543%, INVALIDATED)
+
+---------------------------------------------------------------------
+TICKER: ESSITY-B.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      1
+  - Vinstprocent:      0.0%
+  - Total avkastning:  -0.50%
+  - Edge score:        0%
+  - Max drawdown:      0.50%
+  - Genomsnitt vinst:  0.00%
+  - Genomsnitt förlust: 0.50%
+
+Trades:
+  [2025-12-02] Entry: 261.60 SEK → Exit: 2025-12-04 260.29 SEK (-0.49%, INVALIDATED)
+
+---------------------------------------------------------------------
+TICKER: ALFA.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      2
+  - Vinstprocent:      0.0%
+  - Total avkastning:  -3.01%
+  - Edge score:        0%
+  - Max drawdown:      3.01%
+  - Genomsnitt vinst:  0.00%
+  - Genomsnitt förlust: 1.51%
+
+Trades:
+  [2025-08-29] Entry: 430.5 SEK → Exit: 2025-09-02 424.39 SEK (-1.41%, INVALIDATED)
+  [2025-09-24] Entry: 434.29 SEK → Exit: 2025-09-26 427.29 SEK (-1.61%, INVALIDATED)
+
+---------------------------------------------------------------------
+TICKER: SKF-B.ST
+---------------------------------------------------------------------
+Sammanfattning:
+  - Antal trades:      2
+  - Vinstprocent:      100.0%
+  - Total avkastning:  8.70%
+  - Edge score:        0%
+  - Max drawdown:      0.00%
+  - Genomsnitt vinst:  4.32%
+  - Genomsnitt förlust: 0.00%
+
+Trades:
+  [2025-06-18] Entry: 209.60 SEK → Exit: 2025-07-10 226.03 SEK (7.839%, TARGET_HIT)
+  [2025-09-05] Entry: 238.80 SEK → Exit: 2025-09-08 240.69 SEK (0.795%, INVALIDATED)
+
+=====================================================================
+SAMMANFATTNING
+=====================================================================
+
+
+ÖVERGRIPANDE STATISTIK:
+-----------------------
+Totalt antal aktier testade: 10
+Totalt antal trades: 17
+
+Trade-frekvens per aktie: 1.7 trades/år
+Vinstprocent overall: 52.9% (9 vinster, 8 förluster)
+
+Bästa aktier (avkastning):
+  1. SKF-B.ST:    +8.70% (2 trades, 100% win rate)
+  2. VOLV-B.ST:   +7.90% (1 trade, 100% win rate)
+  3. ATCO-A.ST:   +7.57% (2 trades, 50% win rate)
+
+Sämsta aktier (avkastning):
+  1. SAND.ST:     -4.01% (3 trades, 33% win rate)
+  2. ALFA.ST:     -3.01% (2 trades, 0% win rate)
+  3. HM-B.ST:     -0.63% (1 trade, 0% win rate)
+
+Aktier med TARGET_HIT (nådde målnivå):
+  - VOLV-B.ST: 1 trade (+7.90%)
+  - ASSA-B.ST: 1 trade (+5.78%)
+  - ATCO-A.ST: 1 trade (+9.21%)
+  - SKF-B.ST: 1 trade (+7.84%)
+
+Aktier med flest INVALIDATED (trend bruten):
+  - SAND.ST: 3 trades
+  - ABB.ST: 2 trades
+  - SEB-A.ST: 2 trades
+  - ALFA.ST: 2 trades
+
+INSIKTER:
+---------
+1. LÅGT trade-frekvens: 1-3 trades per aktie under 2025 visar att kriterierna är strikta
+2. BRA riskkontroll: Alla förluster var små (-0.5% till -2.5%) pga INVALIDATED-exits
+3. ASYMMETRISK payoff: Vinnarna (+7-9%) större än förlusterna (-0.5% till -2.5%)
+4. SYSTEMETS STYRKA: Fångar stora rörelser men begränsar förluster effektivt
+
+KRITERIERNAS EFFEKTIVITET:
+--------------------------
+✅ PROS:
+  - Hög vinstprocent (52.9%) trots få trades
+  - Effektiv riskkontroll (max förlust -2.5%)
+  - Fångar kvalitativa setups (4 trades nådde target)
+
+⚠️  CONS:
+  - Låg trade-frekvens (1.7 trades/aktie/år)
+  - Många tidiga INVALIDATED-exits (11 av 17)
+  - Edge score 0% för de flesta (saknas edge_score data i simulering)
+
+REKOMMENDATION:
+---------------
+Kriterierna är INTE för tuffa för Large Cap. Resultaten visar:
+- God riskkontroll
+- Positiv förväntad avkastning
+- Kvalitet över kvantitet fungerar
+
+Med 10-20 aktier i bevakningslista → 17-34 trades/år totalt är rimligt för swing trading.
+
+=====================================================================

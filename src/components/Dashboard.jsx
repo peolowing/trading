@@ -111,10 +111,20 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     }
   }
 
-  async function loadScreener() {
+  async function loadScreener(forceLive = false) {
     setScreenerLoading(true);
     try {
-      const res = await fetch("/api/screener");
+      const url = forceLive ? "/api/screener?live=true" : "/api/screener";
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        if (res.status === 504) {
+          alert('Timeout: Screener-uppdateringen tar för lång tid. Prova igen om en minut.');
+          return;
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+
       const data = await res.json();
 
       // Debug: Log the received data
@@ -131,9 +141,13 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
         setScreenerData([]);
       } else {
         setScreenerData(data.stocks || []);
+        if (forceLive) {
+          alert(`Screener uppdaterad! ${data.totalProcessed} aktier hämtade från Yahoo Finance.`);
+        }
       }
     } catch (e) {
       console.error("Screener error:", e);
+      alert('Fel vid laddning av screener: ' + e.message);
     } finally {
       setScreenerLoading(false);
     }
@@ -1246,6 +1260,26 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
 
         {screenerData && screenerData.length > 0 && (
           <>
+            <div style={{ marginBottom: "12px", display: "flex", gap: "8px", alignItems: "center" }}>
+              <button
+                onClick={() => loadScreener(true)}
+                disabled={screenerLoading}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: "13px",
+                  backgroundColor: screenerLoading ? "#64748b" : "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: screenerLoading ? "not-allowed" : "pointer"
+                }}
+              >
+                🔄 Uppdatera screener
+              </button>
+              <span style={{ fontSize: "12px", color: "#64748b" }}>
+                (Tar ca 30-60 sek)
+              </span>
+            </div>
             <div style={{ overflowX: "auto" }}>
               <table className="screener-table" style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse" }}>
                 <thead>
