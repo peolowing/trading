@@ -1,11 +1,11 @@
 import YahooFinanceClass from 'yahoo-finance2';
+import { EMA, RSI, ATR } from 'technicalindicators';
 
-// Initialize Yahoo Finance v3
+// Initialize Yahoo Finance v3 (required for yahoo-finance2 >= 3.0)
 const yahooFinance = new YahooFinanceClass({
   queue: { timeout: 60000 },
   suppressNotices: ['yahooSurvey', 'ripHistorical']
 });
-import { EMA, RSI, ATR } from 'technicalindicators';
 import dayjs from 'dayjs';
 import { createClient } from '@supabase/supabase-js';
 
