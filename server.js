@@ -12,7 +12,7 @@ const yahooFinance = new YahooFinanceClass({
   queue: {
     timeout: 60000  // 60 second timeout for requests
   },
-  suppressNotices: ['yahooSurvey']
+  suppressNotices: ['yahooSurvey', 'ripHistorical']
 });
 import { updateWatchlistStatus, buildWatchlistInput } from "./lib/watchlistLogic.js";
 import {
@@ -420,10 +420,12 @@ app.get("/api/market-data", async (req, res) => {
 
     // Annars hämta från Yahoo Finance
     console.log(`Fetching fresh market data for ${ticker} from Yahoo Finance`);
-    const data = await yahooFinance.historical(ticker, {
+    const result = await yahooFinance.chart(ticker, {
       period1: startDate,
+      period2: new Date(),
       interval: "1d"
     });
+    const data = result.quotes;
 
     // Spara till Supabase för framtida användning
     await saveMarketData(ticker, data);
@@ -1117,10 +1119,12 @@ app.get("/api/screener", async (req, res) => {
         let candles;
         if (needsFetch) {
           console.log(`Fetching fresh data for ${ticker} from Yahoo Finance (cache age: ${cacheAge} days)...`);
-          const data = await yahooFinance.historical(ticker, {
+          const result = await yahooFinance.chart(ticker, {
             period1: startDate,
+            period2: new Date(),
             interval: "1d"
           });
+          const data = result?.quotes || [];
 
           if (!data || data.length < 50) {
             // If fetch fails but we have cached data, use it even if stale
@@ -1315,10 +1319,12 @@ app.post("/api/screener/stocks", async (req, res) => {
     // Validate stock exists and has sufficient volume
     try {
       console.log(`Validating ${normalizedTicker}...`);
-      const data = await yahooFinance.historical(normalizedTicker, {
-        period1: dayjs().subtract(30, 'day').format('YYYY-MM-DD'),
+      const result = await yahooFinance.chart(normalizedTicker, {
+        period1: dayjs().subtract(30, 'day').toDate(),
+        period2: new Date(),
         interval: "1d"
       });
+      const data = result?.quotes || [];
 
       if (!data || data.length < 20) {
         return res.status(400).json({
@@ -1555,13 +1561,14 @@ app.get("/api/watchlist", async (req, res) => {
       stocks.map(async (stock) => {
         try {
           const today = dayjs().format('YYYY-MM-DD');
-          const startDate = dayjs().subtract(5, 'days').format('YYYY-MM-DD');
 
           // Get latest market data
-          const data = await yahooFinance.historical(stock.ticker, {
-            period1: startDate,
+          const result = await yahooFinance.chart(stock.ticker, {
+            period1: dayjs().subtract(5, 'days').toDate(),
+            period2: new Date(),
             interval: "1d"
           });
+          const data = result?.quotes || [];
 
           const screenerInfo = screenerMap.get(stock.ticker);
 
@@ -2394,11 +2401,12 @@ app.post("/api/portfolio/update", async (req, res) => {
         console.log(`[Portfolio Update] Updating ${position.ticker}...`);
 
         // Hämta färsk data från Yahoo Finance
-        const historical = await yahooFinance.historical(position.ticker, {
-          period1: dayjs().subtract(6, 'month').format('YYYY-MM-DD'),
-          period2: dayjs().format('YYYY-MM-DD'),
+        const chartResult = await yahooFinance.chart(position.ticker, {
+          period1: dayjs().subtract(6, 'month').toDate(),
+          period2: new Date(),
           interval: '1d'
         });
+        const historical = chartResult?.quotes || [];
 
         if (!historical || historical.length === 0) {
           console.error(`[Portfolio Update] No data for ${position.ticker}`);
@@ -2856,11 +2864,12 @@ app.post("/api/agents/scan", async (req, res) => {
         try {
           // Fetch candles
           const queryOptions = {
-            period1: dayjs().subtract(1, 'year').format('YYYY-MM-DD'),
-            period2: dayjs().format('YYYY-MM-DD')
+            period1: dayjs().subtract(1, 'year').toDate(),
+            period2: new Date(),
+            interval: '1d'
           };
-          const result = await yahooFinance.historical(ticker, queryOptions);
-          const candles = result.map(q => ({
+          const chartData = await yahooFinance.chart(ticker, queryOptions);
+          const candles = (chartData?.quotes || []).map(q => ({
             date: q.date,
             open: q.open,
             high: q.high,
