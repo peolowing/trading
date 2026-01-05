@@ -117,6 +117,14 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
       const res = await fetch("/api/screener");
       const data = await res.json();
 
+      // Debug: Log the received data
+      console.log('Dashboard - Screener API response:', data);
+      console.log('Dashboard - Cached:', data.cached, 'Last Update:', data.lastUpdate);
+      console.log('Dashboard - Stocks count:', data.stocks?.length);
+      if (data.stocks && data.stocks.length > 0) {
+        console.log('Dashboard - First stock:', data.stocks[0]);
+      }
+
       // Check if rate limited
       if (data.rateLimited || data.error?.includes('rate limit')) {
         alert(data.error || 'Yahoo Finance rate limit nådd. Vänta några timmar eller använd cachad data.');
