@@ -841,9 +841,6 @@ const UNIVERSE_SE = [
   "NCC-B.ST", "PEAB-B.ST", "SWEC-B.ST", "TREL-B.ST"
 ];
 
-let screenerCache = null;
-let screenerCacheDate = null;
-
 // Volume filter: turnover (close * volume), relative volume, stability
 // Returns true if passes hard filters, false otherwise
 // Bucket classification comes from database (based on Nasdaq Stockholm list)
@@ -1079,13 +1076,49 @@ function calculatePullbackStrength(pullbackDays, relVol, rsi) {
 // STEG 3: Deterministisk bucket-baserad selection (alltid 20+20)
 app.get("/api/screener", async (req, res) => {
   try {
-    const today = dayjs().format("YYYY-MM-DD");
     const forceLive = req.query.live === 'true';
 
-    // Check cache (skip if ?live=true is requested)
-    if (!forceLive && screenerCache && screenerCacheDate === today) {
-      console.log("Using cached screener data");
-      return res.json({ stocks: screenerCache, cached: true });
+    // DEFAULT: Return cached data from database (unless ?live=true)
+    if (!forceLive && screenerRepo.hasDatabase()) {
+      try {
+        console.log("Loading screener from database cache...");
+        const dbStocks = await screenerRepo.findAllActive();
+
+        if (dbStocks && dbStocks.length > 0) {
+          // Map database format to API format
+          const stocksWithScores = dbStocks
+            .map(stock => ({
+              ticker: stock.ticker,
+              name: stock.name,
+              bucket: stock.bucket,
+              edgeScore: stock.edge_score || 50,
+              price: stock.price,
+              ema20: stock.ema20,
+              ema50: stock.ema50,
+              rsi: stock.rsi,
+              atr: stock.atr,
+              relativeVolume: stock.relative_volume,
+              regime: stock.regime,
+              setup: stock.setup,
+              volume: stock.volume,
+              turnoverMSEK: stock.turnover_msek,
+              lastCalculated: stock.last_calculated
+            }))
+            .sort((a, b) => {
+              if (b.edgeScore !== a.edgeScore) return b.edgeScore - a.edgeScore;
+              return a.ticker.localeCompare(b.ticker);
+            });
+
+          return res.json({
+            stocks: stocksWithScores,
+            cached: true,
+            lastUpdate: dbStocks[0]?.last_calculated || null
+          });
+        }
+      } catch (dbError) {
+        console.error("Failed to load from database cache:", dbError.message);
+        // Fall through to live fetch
+      }
     }
 
     console.log(forceLive ? "Running LIVE screener (force refresh)..." : "Running fresh screener...");
@@ -1277,9 +1310,35 @@ app.get("/api/screener", async (req, res) => {
 
     console.log(`Screener result: ${finalLarge.length} Large-cap + ${finalMid.length} Mid-cap = ${finalList.length} total`);
 
-    // Cache results
-    screenerCache = finalList;
-    screenerCacheDate = today;
+    // Save to database cache for future requests
+    if (supabase) {
+      try {
+        const updates = candidates.map(stock => ({
+          ticker: stock.ticker,
+          price: stock.price,
+          volume: stock.volume,
+          turnover_msek: stock.turnoverMSEK,
+          ema20: stock.ema20,
+          ema50: stock.ema50,
+          rsi: stock.rsi,
+          atr: stock.atr,
+          relative_volume: stock.relativeVolume,
+          regime: stock.regime,
+          setup: stock.setup,
+          edge_score: stock.edgeScore,
+          last_calculated: new Date().toISOString()
+        }));
+
+        await supabase
+          .from('screener_stocks')
+          .upsert(updates, { onConflict: 'ticker' });
+
+        console.log(`Updated database cache for ${updates.length} stocks`);
+      } catch (cacheError) {
+        console.error('Failed to update database cache:', cacheError.message);
+        // Don't fail the request if cache update fails
+      }
+    }
 
     res.json({
       stocks: finalList,
