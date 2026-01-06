@@ -905,46 +905,70 @@ function computeFeatures(candles) {
 
 // Ranking: 0-100 score
 // STEG 2: Justerad med högre trend-vikt och mid-cap ATR-straff
+// NEW SCORING FUNCTIONS - synced with api/screener.js
+function determineRegime(ema20, ema50, rsi) {
+  if (ema20 > ema50 && rsi > 50) return "Bullish Trend";
+  if (ema20 < ema50 && rsi < 50) return "Bearish Trend";
+  if (Math.abs(ema20 - ema50) / ema50 < 0.02) return "Consolidation";
+  return "Transition";
+}
+
+function determineSetup(regime, rsi, relativeVolume) {
+  if (regime === "Bullish Trend" && rsi < 70) return "Trend Following";
+  if (regime === "Consolidation" && relativeVolume > 1.2) return "Near Breakout";
+  if (rsi > 70) return "Overbought";
+  if (rsi < 30) return "Oversold";
+  return "No Setup";
+}
+
+function calculateEdgeScore(regime, setup, rsi, relativeVolume, atr, price) {
+  let score = 40;  // Lowered base score to create more room for differentiation
+
+  // Regime scoring (max +15, min -15)
+  if (regime === "Bullish Trend") score += 15;
+  else if (regime === "Consolidation") score += 5;
+  else if (regime === "Bearish Trend") score -= 15;
+  else score -= 10;  // Transition/unknown
+
+  // Setup scoring (max +20, min -5)
+  if (setup === "Trend Following") score += 20;
+  else if (setup === "Near Breakout") score += 15;
+  else if (setup === "Oversold") score += 10;
+  else if (setup === "Overbought") score -= 5;
+  else score += 0;  // No Setup
+
+  // RSI scoring - more granular with sweet spot (max +12, min -12)
+  if (rsi >= 52 && rsi <= 58) score += 12;        // Ideal sweet spot (narrower)
+  else if (rsi >= 45 && rsi <= 65) score += 8;    // Good range
+  else if (rsi >= 40 && rsi <= 70) score += 4;    // Acceptable
+  else if (rsi > 75 || rsi < 25) score -= 12;     // Very extreme
+  else if (rsi > 70 || rsi < 30) score -= 6;      // Extreme
+
+  // Relative volume - granular scoring (max +15, min -10)
+  if (relativeVolume >= 1.5) score += 15;         // Very strong volume
+  else if (relativeVolume >= 1.2) score += 12;    // Strong volume
+  else if (relativeVolume >= 1.0) score += 8;     // Above average
+  else if (relativeVolume >= 0.8) score += 4;     // Moderate
+  else if (relativeVolume >= 0.6) score += 0;     // Low but acceptable
+  else if (relativeVolume >= 0.4) score -= 5;     // Very low
+  else score -= 10;                                // Extremely low
+
+  // ATR percentage - volatility scoring (max +8, min -8)
+  const atrPercent = (atr / price) * 100;
+  if (atrPercent >= 1.8 && atrPercent <= 2.5) score += 8;   // Ideal volatility
+  else if (atrPercent >= 1.2 && atrPercent <= 3.5) score += 5;  // Good range
+  else if (atrPercent >= 0.8 && atrPercent <= 4.5) score += 2;  // Acceptable
+  else if (atrPercent > 6) score -= 8;                      // Too volatile
+  else if (atrPercent < 0.5) score -= 4;                    // Too quiet
+
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
+// DEPRECATED: Old scoring function - kept for reference
 function computeRanking(features, candles, bucket) {
-  let score = 0;
-
-  // 1. Liquidity (30 pts) - justerat för mid-cap
-  const last = candles.at(-1);
-  const turnoverM = (last.close * last.volume) / 1_000_000;
-  if (turnoverM > 200) score += 30;      // Large-cap
-  else if (turnoverM > 100) score += 25; // Large-cap
-  else if (turnoverM > 50) score += 20;  // Large/Mid-cap
-  else if (turnoverM > 30) score += 15;  // Mid-cap
-  else if (turnoverM > 15) score += 10;  // Mid-cap
-
-  // 2. Trend (30 pts) - ÖKA BETYDELSE från 15→18 baspoäng
-  if (features.regime === "UPTREND") {
-    score += 18; // Istället för 15
-    if (features.slope > 0.05) score += 12; // Istället för 10
-    else if (features.slope > 0) score += 6; // Istället för 5
-  } else {
-    if (features.slope < -0.05) score -= 5; // penalize strong downtrend
-  }
-
-  // 3. Volatility (20 pts) - prefer moderate ATR/price
-  const atrPct = features.atr14 / features.close;
-  if (atrPct >= 0.02 && atrPct <= 0.05) score += 20; // sweet spot
-  else if (atrPct > 0.05) score += 10; // high volatility ok
-  else score += 5; // low volatility less interesting
-
-  // STEG 2: Straffa Mid Cap med låg ATR
-  if (bucket === "MID_CAP" && atrPct < 0.018) {
-    score -= 10;
-  }
-
-  // 4. Momentum (20 pts)
-  if (features.rsi14 >= 40 && features.rsi14 <= 60) score += 15; // neutral/bullish
-  else if (features.rsi14 > 60 && features.rsi14 <= 70) score += 10; // strong but not overbought
-  else if (features.rsi14 < 30) score += 5; // oversold = potential
-
-  if (features.relVol > 1.3) score += 5; // above-average volume
-
-  return Math.max(0, Math.min(100, score));
+  // This function is deprecated and replaced by calculateEdgeScore
+  // Kept here to avoid breaking any legacy code that might reference it
+  return 50; // Default score
 }
 
 // ===== TRADING AGENTS DETECTION =====
@@ -1167,12 +1191,6 @@ app.get("/api/screener", async (req, res) => {
         // Bucket comes from database (Nasdaq Stockholm list classification)
         // bucket is already available from the map parameter
 
-        // Beräkna features för ranking
-        const features = computeFeatures(candles);
-
-        // STEG 2: Beräkna edge score (0-100) med justerade vikter
-        const edgeScore = computeRanking(features, candles, bucket);
-
         // Beräkna övrig data för UI
         const closes = candles.map(c => c.close);
         const highs = candles.map(c => c.high);
@@ -1192,20 +1210,10 @@ app.get("/api/screener", async (req, res) => {
         const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
         const relativeVolume = avgVolume > 0 ? volumes[volumes.length - 1] / avgVolume : 1;
 
-        let regime = "Consolidation";
-        if (lastEma20 > lastEma50 && lastClose > lastEma20) regime = "Bullish Trend";
-        else if (lastEma20 < lastEma50 && lastClose < lastEma20) regime = "Bearish Trend";
-
-        const setup = detectStrategy({
-          ema20: lastEma20,
-          ema50: lastEma50,
-          rsi14: lastRsi,
-          relativeVolume,
-          regime,
-          close: lastClose,
-          high: highs[highs.length - 1],
-          low: lows[lows.length - 1]
-        });
+        // NEW SCORING LOGIC - synced with Vercel api/screener.js
+        const regime = determineRegime(lastEma20, lastEma50, lastRsi);
+        const setup = determineSetup(regime, lastRsi, relativeVolume);
+        const edgeScore = calculateEdgeScore(regime, setup, lastRsi, relativeVolume, lastAtr, lastClose);
 
         // Calculate turnover in MSEK
         const lastVolume = candles.at(-1).volume;
