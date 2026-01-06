@@ -1080,14 +1080,15 @@ function calculatePullbackStrength(pullbackDays, relVol, rsi) {
 app.get("/api/screener", async (req, res) => {
   try {
     const today = dayjs().format("YYYY-MM-DD");
+    const forceLive = req.query.live === 'true';
 
-    // Check cache
-    if (screenerCache && screenerCacheDate === today) {
+    // Check cache (skip if ?live=true is requested)
+    if (!forceLive && screenerCache && screenerCacheDate === today) {
       console.log("Using cached screener data");
-      return res.json({ stocks: screenerCache });
+      return res.json({ stocks: screenerCache, cached: true });
     }
 
-    console.log("Running fresh screener...");
+    console.log(forceLive ? "Running LIVE screener (force refresh)..." : "Running fresh screener...");
 
     // Get dynamic stock list WITH bucket from database, fallback to hardcoded list
     let stocksWithBucket = [];
@@ -1136,9 +1137,9 @@ app.get("/api/screener", async (req, res) => {
           : null;
         const cacheAge = latestCachedDate ? dayjs().diff(latestCachedDate, 'day') : Infinity;
 
-        // Accept cached data up to 7 days old
+        // Accept cached data up to 7 days old (or force fetch if ?live=true)
         const CACHE_STALE_DAYS = 7;
-        const needsFetch = !cachedData || cachedData.length === 0 || cacheAge > CACHE_STALE_DAYS;
+        const needsFetch = forceLive || !cachedData || cachedData.length === 0 || cacheAge > CACHE_STALE_DAYS;
 
         let candles;
         if (needsFetch) {
@@ -1280,7 +1281,12 @@ app.get("/api/screener", async (req, res) => {
     screenerCache = finalList;
     screenerCacheDate = today;
 
-    res.json({ stocks: finalList });
+    res.json({
+      stocks: finalList,
+      cached: false,
+      lastUpdate: new Date().toISOString(),
+      totalProcessed: finalList.length
+    });
   } catch (e) {
     console.error("Screener error:", e);
     res.status(500).json({ error: "Failed to run screener" });
