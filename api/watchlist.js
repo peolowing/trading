@@ -114,16 +114,24 @@ export default async function handler(req, res) {
           console.log(`[Watchlist Update] Processing ${ticker}... (${i + 1}/${watchlistStocks.length})`);
 
           // Fetch fresh data for today
-          const rawCandles = await yahooFinance.chart(ticker, {
-            period1: dayjs().subtract(1, 'year').toDate(),
-            period2: new Date(),
-            interval: '1d'
-          });
-
-          if (!rawCandles || !rawCandles.quotes || rawCandles.quotes.length === 0) {
-            console.warn(`No data for ${ticker}`);
+          let rawCandles;
+          try {
+            rawCandles = await yahooFinance.chart(ticker, {
+              period1: dayjs().subtract(1, 'year').toDate(),
+              period2: new Date(),
+              interval: '1d'
+            });
+          } catch (fetchError) {
+            console.error(`[Watchlist Update] ✗ Yahoo Finance fetch failed for ${ticker}:`, fetchError.message);
             continue;
           }
+
+          if (!rawCandles || !rawCandles.quotes || rawCandles.quotes.length === 0) {
+            console.warn(`[Watchlist Update] ✗ No data returned for ${ticker}`);
+            continue;
+          }
+
+          console.log(`[Watchlist Update] ✓ Fetched ${rawCandles.quotes.length} candles for ${ticker}`);
 
           const candles = rawCandles.quotes.map(q => ({
             date: q.date.toISOString().split('T')[0],
@@ -192,8 +200,9 @@ export default async function handler(req, res) {
             .eq('ticker', ticker);
 
           if (updateError) {
-            console.error(`Failed to update ${ticker}:`, updateError);
+            console.error(`[Watchlist Update] ✗ DB update failed for ${ticker}:`, updateError);
           } else {
+            console.log(`[Watchlist Update] ✓ Successfully updated ${ticker} - Status: ${result.status}`);
             updates.push(ticker);
           }
         } catch (e) {
