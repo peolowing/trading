@@ -190,8 +190,8 @@ export default async function handler(req, res) {
             dist_ema20_pct: parseFloat(result.diagnostics.distEma20Pct),
             rsi_zone: result.diagnostics.rsiZone,
             volume_state: result.diagnostics.volumeState,
-            time_warning: result.timeWarning,
-            last_invalidated_date: result.lastInvalidatedDate || stock.last_invalidated_date
+            time_warning: result.timeWarning
+            // Note: last_invalidated_date removed - column doesn't exist in database
           };
 
           const { error: updateError } = await supabase
