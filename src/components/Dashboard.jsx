@@ -69,6 +69,33 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     }
   }
 
+  async function updateWatchlistStatuses() {
+    setRefreshingLive(true);
+    try {
+      const res = await fetch("/api/watchlist/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      console.log("Watchlist update result:", data);
+
+      // Reload watchlist to get updated data
+      await loadWatchlist();
+
+      alert(`Bevakningslista uppdaterad! ${data.updated || 0} aktier behandlade.`);
+    } catch (e) {
+      console.error("Watchlist update error:", e);
+      alert('Fel vid uppdatering av bevakningslista: ' + e.message);
+    } finally {
+      setRefreshingLive(false);
+    }
+  }
+
   async function fetchLiveData(stocks) {
     setRefreshingLive(true);
     try {
@@ -633,6 +660,26 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
           {watchlist.length > 0 && (
             <div style={{ display: "flex", gap: "8px" }}>
               <button
+                onClick={updateWatchlistStatuses}
+                disabled={refreshingLive}
+                style={{
+                  padding: "6px 12px",
+                  background: refreshingLive ? "#e5e7eb" : "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: "500",
+                  cursor: refreshingLive ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "all 0.2s"
+                }}
+              >
+                {refreshingLive ? "Uppdaterar..." : "🔄 Uppdatera statusar"}
+              </button>
+              <button
                 onClick={refreshLiveData}
                 disabled={refreshingLive}
                 style={{
@@ -662,7 +709,7 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                   }
                 }}
               >
-                {refreshingLive ? "Uppdaterar..." : "🔄 Uppdatera"}
+                {refreshingLive ? "Uppdaterar..." : "💰 Uppdatera priser"}
               </button>
               <button
                 onClick={() => setShowHelpModal(true)}
