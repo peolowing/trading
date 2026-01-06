@@ -197,9 +197,12 @@ export default async function handler(req, res) {
             updates.push(ticker);
           }
         } catch (e) {
-          console.error(`Error processing ${stock.ticker}:`, e);
+          console.error(`[Watchlist Update] ✗ Error processing ${stock.ticker}:`, e.message);
+          console.error(`[Watchlist Update] Stack:`, e.stack);
         }
       }
+
+      console.log(`[Watchlist Update] Complete: ${updates.length}/${watchlistStocks.length} stocks updated`);
 
       return res.json({
         message: "Watchlist updated",
