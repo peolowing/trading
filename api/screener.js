@@ -76,24 +76,44 @@ function determineSetup(regime, rsi, relativeVolume) {
 }
 
 function calculateEdgeScore(regime, setup, rsi, relativeVolume, atr, price) {
-  let score = 50;
-  if (regime === "Bullish Trend") score += 15;
-  else if (regime === "Consolidation") score += 10;
-  else if (regime === "Bearish Trend") score -= 10;
+  let score = 40;  // Lowered base score to create more room for differentiation
 
+  // Regime scoring (max +15, min -15)
+  if (regime === "Bullish Trend") score += 15;
+  else if (regime === "Consolidation") score += 5;
+  else if (regime === "Bearish Trend") score -= 15;
+  else score -= 10;  // Transition/unknown
+
+  // Setup scoring (max +20, min -5)
   if (setup === "Trend Following") score += 20;
   else if (setup === "Near Breakout") score += 15;
   else if (setup === "Oversold") score += 10;
+  else if (setup === "Overbought") score -= 5;
+  else score += 0;  // No Setup
 
-  if (rsi > 40 && rsi < 70) score += 10;
-  else if (rsi > 70 || rsi < 30) score -= 15;
+  // RSI scoring - more granular with sweet spot (max +12, min -12)
+  if (rsi >= 52 && rsi <= 58) score += 12;        // Ideal sweet spot (narrower)
+  else if (rsi >= 45 && rsi <= 65) score += 8;    // Good range
+  else if (rsi >= 40 && rsi <= 70) score += 4;    // Acceptable
+  else if (rsi > 75 || rsi < 25) score -= 12;     // Very extreme
+  else if (rsi > 70 || rsi < 30) score -= 6;      // Extreme
 
-  if (relativeVolume > 1.5) score += 10;
-  else if (relativeVolume < 0.5) score -= 10;
+  // Relative volume - granular scoring (max +15, min -10)
+  if (relativeVolume >= 1.5) score += 15;         // Very strong volume
+  else if (relativeVolume >= 1.2) score += 12;    // Strong volume
+  else if (relativeVolume >= 1.0) score += 8;     // Above average
+  else if (relativeVolume >= 0.8) score += 4;     // Moderate
+  else if (relativeVolume >= 0.6) score += 0;     // Low but acceptable
+  else if (relativeVolume >= 0.4) score -= 5;     // Very low
+  else score -= 10;                                // Extremely low
 
+  // ATR percentage - volatility scoring (max +8, min -8)
   const atrPercent = (atr / price) * 100;
-  if (atrPercent > 1 && atrPercent < 4) score += 5;
-  else if (atrPercent > 6) score -= 10;
+  if (atrPercent >= 1.8 && atrPercent <= 2.5) score += 8;   // Ideal volatility
+  else if (atrPercent >= 1.2 && atrPercent <= 3.5) score += 5;  // Good range
+  else if (atrPercent >= 0.8 && atrPercent <= 4.5) score += 2;  // Acceptable
+  else if (atrPercent > 6) score -= 8;                      // Too volatile
+  else if (atrPercent < 0.5) score -= 4;                    // Too quiet
 
   return Math.min(100, Math.max(0, Math.round(score)));
 }
