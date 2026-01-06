@@ -101,9 +101,17 @@ export default async function handler(req, res) {
         avgTurnoverMap.set(s.ticker, s.avg_turnover);
       });
 
-      for (const stock of watchlistStocks) {
+      for (let i = 0; i < watchlistStocks.length; i++) {
+        const stock = watchlistStocks[i];
+
+        // Add delay between requests to avoid rate limiting (except for first request)
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
         try {
           const ticker = stock.ticker;
+          console.log(`[Watchlist Update] Processing ${ticker}... (${i + 1}/${watchlistStocks.length})`);
 
           // Fetch fresh data for today
           const rawCandles = await yahooFinance.chart(ticker, {
