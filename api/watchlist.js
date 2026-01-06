@@ -104,12 +104,12 @@ export default async function handler(req, res) {
       for (const stock of watchlistStocks) {
         try {
           const ticker = stock.ticker;
-          const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
 
           // Fetch fresh data for today
           const rawCandles = await yahooFinance.chart(ticker, {
-            period1: startDate,
-            period2: today
+            period1: dayjs().subtract(1, 'year').toDate(),
+            period2: new Date(),
+            interval: '1d'
           });
 
           if (!rawCandles || !rawCandles.quotes || rawCandles.quotes.length === 0) {
