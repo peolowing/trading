@@ -117,18 +117,41 @@ Ge ditt svar i exakt följande format:
     // Save to Supabase cache
     if (supabase) {
       try {
-        const { data: saveResult, error: saveError } = await supabase
+        // Try to update existing record first
+        const { data: existing } = await supabase
           .from('ai_analysis')
-          .upsert({
-            ticker,
-            analysis_date: today,
-            analysis_text: analysis
-          }, { onConflict: 'ticker,analysis_date' });
+          .select('id')
+          .eq('ticker', ticker)
+          .eq('analysis_date', today)
+          .maybeSingle();
 
-        if (saveError) {
-          console.error(`[AI Cache SAVE ERROR] ${ticker}:`, saveError);
+        if (existing) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('ai_analysis')
+            .update({ analysis_text: analysis })
+            .eq('id', existing.id);
+
+          if (updateError) {
+            console.error(`[AI Cache UPDATE ERROR] ${ticker}:`, updateError);
+          } else {
+            console.log(`[AI Cache UPDATED] ${ticker} for ${today}`);
+          }
         } else {
-          console.log(`[AI Cache SAVED] ${ticker} for ${today}`);
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('ai_analysis')
+            .insert({
+              ticker,
+              analysis_date: today,
+              analysis_text: analysis
+            });
+
+          if (insertError) {
+            console.error(`[AI Cache INSERT ERROR] ${ticker}:`, insertError);
+          } else {
+            console.log(`[AI Cache INSERTED] ${ticker} for ${today}`);
+          }
         }
       } catch (e) {
         console.error(`[AI Cache Save Exception] ${ticker}:`, e.message, e.stack);
