@@ -117,16 +117,21 @@ Ge ditt svar i exakt följande format:
     // Save to Supabase cache
     if (supabase) {
       try {
-        await supabase
+        const { data: saveResult, error: saveError } = await supabase
           .from('ai_analysis')
           .upsert({
             ticker,
             analysis_date: today,
             analysis_text: analysis
           }, { onConflict: 'ticker,analysis_date' });
-        console.log(`[AI Cache SAVED] ${ticker}`);
+
+        if (saveError) {
+          console.error(`[AI Cache SAVE ERROR] ${ticker}:`, saveError);
+        } else {
+          console.log(`[AI Cache SAVED] ${ticker} for ${today}`);
+        }
       } catch (e) {
-        console.warn(`[AI Cache Save Failed] ${e.message}`);
+        console.error(`[AI Cache Save Exception] ${ticker}:`, e.message, e.stack);
       }
     }
 
