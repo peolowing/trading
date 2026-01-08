@@ -23,6 +23,22 @@
     {
       "source": "/api/watchlist/:ticker",
       "destination": "/api/watchlist"
+    },
+    {
+      "source": "/api/portfolio/exit/:ticker",
+      "destination": "/api/portfolio"
+    },
+    {
+      "source": "/api/portfolio/notes/:ticker",
+      "destination": "/api/portfolio"
+    },
+    {
+      "source": "/api/portfolio/update",
+      "destination": "/api/portfolio"
+    },
+    {
+      "source": "/api/portfolio/:ticker",
+      "destination": "/api/portfolio"
     }
   ]
 }
