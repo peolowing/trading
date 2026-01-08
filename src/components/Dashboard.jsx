@@ -1227,8 +1227,16 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                               <div style={{ padding: "16px", background: "#eff6ff", borderRadius: "8px", border: "1px solid #93c5fd" }}>
                                 <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#1e40af", marginBottom: "8px" }}>💡 Bedömning:</h4>
                                 <div style={{ fontSize: "13px", color: "#1e40af" }}>
-                                  {!anyBlocks ? (
-                                    <div><strong>PERFEKT!</strong> Alla förutsättningar är uppfyllda för köp. ✅</div>
+                                  {status === "INVALIDATED" ? (
+                                    <div><strong>⛔ INVALIDERAD:</strong> {item.status_reason || "Trenden är bruten eller villkor ej uppfyllda."}</div>
+                                  ) : status === "READY" || status === "BREAKOUT_READY" ? (
+                                    <div><strong>✅ PERFEKT!</strong> Alla förutsättningar är uppfyllda för köp.</div>
+                                  ) : status === "APPROACHING" ? (
+                                    <div><strong>🟡 NÄSTAN REDO:</strong> {item.status_reason || "Aktien närmar sig optimal entry."} Vänta på pullback mot EMA20 (behöver komma ner till 0-1.5% över EMA20).</div>
+                                  ) : status === "WAIT_PULLBACK" ? (
+                                    <div><strong>🔵 VÄNTA:</strong> {item.status_reason || "Vänta på pullback."}</div>
+                                  ) : !anyBlocks ? (
+                                    <div><strong>OK:</strong> Inga kritiska blockeringar men ej optimalt läge än. Status: {status}</div>
                                   ) : (
                                     <>
                                       <div style={{ marginBottom: "8px" }}>

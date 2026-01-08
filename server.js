@@ -457,8 +457,8 @@ app.post("/api/analyze", async (req, res) => {
         : null;
       const cacheAge = latestCachedDate ? dayjs().diff(latestCachedDate, 'day') : Infinity;
 
-      // Accept cached data up to 7 days old
-      const CACHE_STALE_DAYS = 7;
+      // Accept cached data up to 1 day old (refresh daily for current data)
+      const CACHE_STALE_DAYS = 1;
       const needsFetch = !cachedData || cachedData.length === 0 || cacheAge > CACHE_STALE_DAYS;
 
       if (needsFetch) {
@@ -595,10 +595,27 @@ app.post("/api/analyze", async (req, res) => {
       slope
     };
 
-    // Use computeRanking for consistent scoring (0-100 scale)
-    const finalEdgeScore = bucket !== "UNKNOWN"
-      ? computeRanking(features, candles, bucket)
-      : 50; // Default if no bucket
+    // Fetch edge score from screener_stocks table (0-100 scale)
+    let edgeScoreFromDB = null;
+    if (supabase && ticker) {
+      try {
+        const { data: screenerData } = await supabase
+          .from('screener_stocks')
+          .select('edge_score')
+          .eq('ticker', ticker)
+          .maybeSingle();
+
+        edgeScoreFromDB = screenerData?.edge_score;
+        console.log(`[Analyze] ${ticker} edge_score from DB: ${edgeScoreFromDB}`);
+      } catch (e) {
+        console.error(`Failed to fetch edge_score for ${ticker}:`, e);
+      }
+    }
+
+    // Use database edge_score if available, otherwise compute ranking
+    const finalEdgeScore = (edgeScoreFromDB !== null && edgeScoreFromDB !== undefined)
+      ? edgeScoreFromDB
+      : (bucket !== "UNKNOWN" ? computeRanking(features, candles, bucket) : 50);
 
     const scoring = {
       score: finalEdgeScore,
@@ -1170,8 +1187,8 @@ app.get("/api/screener", async (req, res) => {
           : null;
         const cacheAge = latestCachedDate ? dayjs().diff(latestCachedDate, 'day') : Infinity;
 
-        // Accept cached data up to 7 days old (or force fetch if ?live=true)
-        const CACHE_STALE_DAYS = 7;
+        // Accept cached data up to 1 day old (or force fetch if ?live=true)
+        const CACHE_STALE_DAYS = 1;
         const needsFetch = forceLive || !cachedData || cachedData.length === 0 || cacheAge > CACHE_STALE_DAYS;
 
         let candles;

@@ -37,7 +37,7 @@ export async function findAllActive() {
   try {
     const { data, error } = await supabase
       .from('screener_stocks')
-      .select('ticker, bucket')
+      .select('*')
       .eq('is_active', true);
 
     if (error) {

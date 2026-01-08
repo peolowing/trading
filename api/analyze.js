@@ -285,26 +285,51 @@ export default async function handler(req, res) {
 
           const indicators = dbCached.indicators_data;
 
-          // Calculate edge score
-          const regime = indicators.regime;
-          const setup = indicators.setup;
-          const rsi14 = indicators.rsi14;
-          const relativeVolume = indicators.relativeVolume;
+          // Fetch edge score from screener_stocks table (0-100 scale)
+          let edgeScoreFromDB = null;
+          try {
+            const { data: screenerData } = await supabase
+              .from('screener_stocks')
+              .select('edge_score')
+              .eq('ticker', ticker)
+              .maybeSingle();
 
-          let edgeScore = 5;
-          if (regime === "Bullish Trend") edgeScore += 2;
-          else if (regime === "Bearish Trend") edgeScore -= 2;
-          if (rsi14 >= 40 && rsi14 <= 60) edgeScore += 1;
-          if (rsi14 < 30 || rsi14 > 70) edgeScore -= 1;
-          if (relativeVolume > 1.5) edgeScore += 1;
-          if (relativeVolume < 0.8) edgeScore -= 0.5;
-          if (setup !== "Hold") edgeScore += 0.5;
+            edgeScoreFromDB = screenerData?.edge_score;
+          } catch (e) {
+            console.error(`Failed to fetch edge_score for ${ticker}:`, e);
+          }
 
-          const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+          // Use database edge_score if available, otherwise calculate fallback
+          let finalEdgeScore;
+          let scoreLabel;
+
+          if (edgeScoreFromDB !== null && edgeScoreFromDB !== undefined) {
+            // Use database score (0-100 scale)
+            finalEdgeScore = edgeScoreFromDB;
+            scoreLabel = finalEdgeScore >= 70 ? "Strong Edge" : finalEdgeScore >= 50 ? "OK" : "Weak Edge";
+          } else {
+            // Fallback: calculate basic score (0-10 scale)
+            const regime = indicators.regime;
+            const setup = indicators.setup;
+            const rsi14 = indicators.rsi14;
+            const relativeVolume = indicators.relativeVolume;
+
+            let edgeScore = 5;
+            if (regime === "Bullish Trend") edgeScore += 2;
+            else if (regime === "Bearish Trend") edgeScore -= 2;
+            if (rsi14 >= 40 && rsi14 <= 60) edgeScore += 1;
+            if (rsi14 < 30 || rsi14 > 70) edgeScore -= 1;
+            if (relativeVolume > 1.5) edgeScore += 1;
+            if (relativeVolume < 0.8) edgeScore -= 0.5;
+            if (setup !== "Hold") edgeScore += 0.5;
+
+            finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+            scoreLabel = finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge";
+          }
 
           const scoring = {
             score: finalEdgeScore,
-            label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+            label: scoreLabel
           };
 
           // Run backtest if setup is not Hold
@@ -476,21 +501,48 @@ export default async function handler(req, res) {
       setup
     };
 
-    // Calculate edge score (0-10 scale)
-    let edgeScore = 5;
-    if (regime === "Bullish Trend") edgeScore += 2;
-    else if (regime === "Bearish Trend") edgeScore -= 2;
-    if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
-    if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
-    if (relativeVolume > 1.5) edgeScore += 1;
-    if (relativeVolume < 0.8) edgeScore -= 0.5;
-    if (setup !== "Hold") edgeScore += 0.5;
+    // Fetch edge score from screener_stocks table (0-100 scale)
+    let edgeScoreFromDB = null;
+    if (supabase) {
+      try {
+        const { data: screenerData } = await supabase
+          .from('screener_stocks')
+          .select('edge_score')
+          .eq('ticker', ticker)
+          .maybeSingle();
 
-    const finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+        edgeScoreFromDB = screenerData?.edge_score;
+      } catch (e) {
+        console.error(`Failed to fetch edge_score for ${ticker}:`, e);
+      }
+    }
+
+    // Use database edge_score if available, otherwise calculate fallback (0-10 scale)
+    let finalEdgeScore;
+    let scoreLabel;
+
+    if (edgeScoreFromDB !== null && edgeScoreFromDB !== undefined) {
+      // Use database score (0-100 scale)
+      finalEdgeScore = edgeScoreFromDB;
+      scoreLabel = finalEdgeScore >= 70 ? "Strong Edge" : finalEdgeScore >= 50 ? "OK" : "Weak Edge";
+    } else {
+      // Fallback: calculate basic score (0-10 scale)
+      let edgeScore = 5;
+      if (regime === "Bullish Trend") edgeScore += 2;
+      else if (regime === "Bearish Trend") edgeScore -= 2;
+      if (indicators.rsi14 >= 40 && indicators.rsi14 <= 60) edgeScore += 1;
+      if (indicators.rsi14 < 30 || indicators.rsi14 > 70) edgeScore -= 1;
+      if (relativeVolume > 1.5) edgeScore += 1;
+      if (relativeVolume < 0.8) edgeScore -= 0.5;
+      if (setup !== "Hold") edgeScore += 0.5;
+
+      finalEdgeScore = Math.max(0, Math.min(10, Math.round(edgeScore * 10) / 10));
+      scoreLabel = finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge";
+    }
 
     const scoring = {
       score: finalEdgeScore,
-      label: finalEdgeScore >= 7 ? "Strong Edge" : finalEdgeScore >= 5 ? "OK" : "Weak Edge"
+      label: scoreLabel
     };
 
     // Run backtest with detected strategy
