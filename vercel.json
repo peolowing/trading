@@ -37,6 +37,14 @@
       "destination": "/api/portfolio"
     },
     {
+      "source": "/api/portfolio/analyze/:ticker",
+      "destination": "/api/portfolio-analysis"
+    },
+    {
+      "source": "/api/portfolio/ai-history/:ticker",
+      "destination": "/api/portfolio-analysis"
+    },
+    {
       "source": "/api/portfolio/:ticker",
       "destination": "/api/portfolio"
     }

@@ -23,6 +23,13 @@ export default function PositionDetail({ ticker, onBack }) {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showJournalForm, setShowJournalForm] = useState(false);
 
+  // AI Analysis state
+  const [aiAnalysis, setAiAnalysis] = useState("Klicka på 'Kör AI-analys' för att få regelbaserad vägledning");
+  const [aiHistory, setAiHistory] = useState(null);
+  const [refreshingAi, setRefreshingAi] = useState(false);
+  const [selectedAnalysisTab, setSelectedAnalysisTab] = useState(0);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+
   const [exitFormData, setExitFormData] = useState({
     exit_type: 'FULL',
     exit_price: '',
@@ -101,6 +108,9 @@ export default function PositionDetail({ ticker, onBack }) {
       const journalData = await journalRes.json();
       setJournalEntries(journalData.trades || []);
 
+      // Load AI analysis history on page load
+      await loadAiHistory();
+
     } catch (e) {
       console.error("Failed to load position details:", e);
     } finally {
@@ -135,6 +145,59 @@ export default function PositionDetail({ ticker, onBack }) {
       }
     } catch (e) {
       console.error("Failed to exit position:", e);
+    }
+  }
+
+  async function refreshAiAnalysis() {
+    if (!position || !position.current_price) {
+      alert("Vänligen vänta tills positionsdata laddats");
+      return;
+    }
+
+    setRefreshingAi(true);
+    try {
+      const res = await fetch(`/api/portfolio/analyze/${ticker}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPrice: position.current_price
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAiAnalysis(data.analysis);
+
+        // Load AI history to show in tabs
+        await loadAiHistory();
+      } else {
+        const error = await res.json();
+        setAiAnalysis(`❌ AI-analys misslyckades: ${error.error || 'Okänt fel'}`);
+      }
+    } catch (e) {
+      console.error("Failed to refresh AI analysis:", e);
+      setAiAnalysis("❌ AI-analys inte tillgänglig");
+    } finally {
+      setRefreshingAi(false);
+    }
+  }
+
+  async function loadAiHistory() {
+    try {
+      // Fetch AI analysis history for this position
+      const historyRes = await fetch(`/api/portfolio/ai-history/${ticker}`);
+      if (historyRes.ok) {
+        const historyData = await historyRes.json();
+        setAiHistory(historyData);
+
+        // Show the most recent analysis if available
+        if (historyData.analyses && historyData.analyses.length > 0) {
+          setSelectedAnalysisTab(0);
+          setAiAnalysis(historyData.analyses[0].analysis);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load AI history:", e);
     }
   }
 
@@ -1103,7 +1166,171 @@ export default function PositionDetail({ ticker, onBack }) {
           </form>
         </div>
       )}
+      {/* ============================================ */}
+      {/* 🤖 AI-ANALYS (REGELBASERAD VÄGLEDNING) */}
+      {/* ============================================ */}
+      <div className="card" style={{ marginTop: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ margin: 0 }}>🤖 AI-Analys (Regelbaserad Vägledning)</h3>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={() => setShowRulesModal(true)}
+              style={{
+                padding: "8px 12px",
+                background: "transparent",
+                color: "#64748b",
+                border: "1px solid #cbd5e1",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+              title="Visa regelbok"
+            >
+              ❓ Regler
+            </button>
+            <button
+              onClick={refreshAiAnalysis}
+              disabled={refreshingAi || !position}
+              style={{
+                padding: "8px 16px",
+                background: refreshingAi ? "#cbd5e1" : "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: refreshingAi ? "not-allowed" : "pointer"
+              }}
+            >
+              {refreshingAi ? "🔄 Analyserar..." : "Kör AI-analys"}
+            </button>
+          </div>
+        </div>
 
+        {/* Analysis History Tabs */}
+        {aiHistory?.analyses && aiHistory.analyses.length > 1 && (
+          <div style={{ marginBottom: "15px" }}>
+            <div style={{
+              display: "flex",
+              gap: "8px",
+              borderBottom: "2px solid #e5e7eb",
+              marginBottom: "12px",
+              overflowX: "auto"
+            }}>
+              {aiHistory.analyses.map((analysis, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setSelectedAnalysisTab(idx);
+                    setAiAnalysis(analysis.analysis);
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    background: selectedAnalysisTab === idx ? "#3b82f6" : "transparent",
+                    color: selectedAnalysisTab === idx ? "white" : "#6b7280",
+                    border: "none",
+                    borderBottom: selectedAnalysisTab === idx ? "2px solid #3b82f6" : "2px solid transparent",
+                    cursor: "pointer",
+                    borderRadius: "4px 4px 0 0",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {idx === 0 ? "Senaste" : `Analys ${idx + 1}`}
+                  <div style={{ fontSize: "10px", opacity: 0.8, marginTop: "2px" }}>
+                    {new Date(analysis.timestamp).toLocaleString('sv-SE', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Show single analysis count badge */}
+        {aiHistory?.count === 1 && (
+          <div style={{
+            marginBottom: "16px",
+            padding: "8px 12px",
+            background: "#eff6ff",
+            borderRadius: "6px",
+            border: "1px solid #93c5fd",
+            fontSize: "12px",
+            color: "#1e40af",
+            display: "inline-block"
+          }}>
+            📊 1 analys sparad
+          </div>
+        )}
+
+        {/* AI Analysis content */}
+        <div style={{
+          padding: "20px",
+          background: "#f8fafc",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          fontSize: "14px",
+          lineHeight: "1.6",
+          whiteSpace: "pre-wrap"
+        }}>
+          {aiAnalysis}
+        </div>
+
+        {/* Show metrics if available */}
+        {aiHistory?.analyses && aiHistory.analyses.length > 0 && aiHistory.analyses[selectedAnalysisTab]?.metrics && (
+          <div style={{
+            marginTop: "16px",
+            padding: "16px",
+            background: "#f0f9ff",
+            borderRadius: "8px",
+            border: "1px solid #bae6fd"
+          }}>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "700", color: "#0c4a6e" }}>
+              📊 Nyckeltal
+            </h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", fontSize: "13px" }}>
+              {aiHistory.analyses[selectedAnalysisTab].metrics.currentR && (
+                <div>
+                  <strong>Nuvarande R:</strong> {aiHistory.analyses[selectedAnalysisTab].metrics.currentR}R
+                </div>
+              )}
+              {aiHistory.analyses[selectedAnalysisTab].metrics.daysInTrade !== undefined && (
+                <div>
+                  <strong>Dagar i trade:</strong> {aiHistory.analyses[selectedAnalysisTab].metrics.daysInTrade}
+                </div>
+              )}
+              {aiHistory.analyses[selectedAnalysisTab].metrics.distanceToTarget && (
+                <div>
+                  <strong>Till target:</strong> {aiHistory.analyses[selectedAnalysisTab].metrics.distanceToTarget} kr
+                </div>
+              )}
+              {aiHistory.analyses[selectedAnalysisTab].metrics.distanceToStop && (
+                <div>
+                  <strong>Till stop:</strong> {aiHistory.analyses[selectedAnalysisTab].metrics.distanceToStop} kr
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          marginTop: "16px",
+          fontSize: "12px",
+          color: "#64748b",
+          borderTop: "1px solid #e2e8f0",
+          paddingTop: "12px"
+        }}>
+          <strong>Obs:</strong> AI-analysen följer strikta stop-management och time stop-regler.
+          Den ersätter INTE ditt eget omdöme men ger objektiv vägledning baserad på professionella swing trading-principer.
+        </div>
+      </div>
       {/* ============================================ */}
       {/* 4️⃣ TIDSAXEL / HÄNDELSELOGG */}
       {/* ============================================ */}
@@ -1287,6 +1514,195 @@ export default function PositionDetail({ ticker, onBack }) {
             </div>
             <div style={{ fontSize: "14px", color: "#0f172a", lineHeight: "1.6" }}>
               {position.lessons_learned || "Ingen lärdom registrerad."}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Rules Modal */}
+      {showRulesModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px"
+          }}
+          onClick={() => setShowRulesModal(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              maxWidth: "900px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflow: "auto",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              position: "sticky",
+              top: 0,
+              background: "white",
+              borderBottom: "2px solid #e5e7eb",
+              padding: "20px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "#0f172a" }}>
+                📋 AI-Analys Regelbok
+              </h2>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  padding: "4px 8px"
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ padding: "24px", lineHeight: "1.6" }}>
+              {/* STOP-FLYTT-SCHEMA */}
+              <section style={{ marginBottom: "32px" }}>
+                <h3 style={{ color: "#0f172a", marginBottom: "16px" }}>A) STOP-FLYTT-SCHEMA (5 nivåer)</h3>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#fafafa", borderLeft: "4px solid #94a3b8", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#475569" }}>🔒 Nivå 0 – INITIALT LÄGE</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Villkor:</strong> Priset mellan initial stop och ~entry + 0.5R, ingen ny struktur</p>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Stop = initial stop, INGEN flytt, INGEN delvinst</p>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#64748b" }}><strong>Filosofi:</strong> De flesta förstör trades genom att göra något i onödan</p>
+                </div>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#fefce8", borderLeft: "4px solid #fbbf24", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#92400e" }}>🟡 Nivå 1 – Tidig rörelse (+0.5R till +1R)</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Villkor:</strong> Pris når +0.5R till +1R</p>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Stop FLYTTAS INTE, ingen vinst tas, endast observation</p>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#92400e" }}><strong>Filosofi:</strong> Vinst är inte intjänad förrän marknaden skapar struktur</p>
+                </div>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#f0fdf4", borderLeft: "4px solid #22c55e", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#15803d" }}>🟢 Nivå 2 – Första BEKRÄFTADE styrkan</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Trigger:</strong></p>
+                  <ul style={{ margin: "4px 0", paddingLeft: "20px" }}>
+                    <li>Dagstängning ≥ Entry + 1R, ELLER</li>
+                    <li>Högre high + tydlig rekyl + ny högre botten</li>
+                  </ul>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Flytta stop till break-even (entry-pris) eller entry + liten buffert</p>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#15803d" }}><strong>Filosofi:</strong> Nu är traden riskfri – men fortfarande levande</p>
+                </div>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#eff6ff", borderLeft: "4px solid #3b82f6", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#1e40af" }}>🔵 Nivå 3 – Strukturell trend etablerad</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Trigger:</strong> Nytt högre high + kontrollerad rekyl + nytt högre swing-low</p>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Flytta stop till under senaste swing-low</p>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#1e40af" }}><strong>Filosofi:</strong> Här börjar du låsa marknadsstruktur, inte kronor</p>
+                </div>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#faf5ff", borderLeft: "4px solid #a855f7", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#7e22ce" }}>🟣 Nivå 4 – Target-zon (≥2R)</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Trigger:</strong> Pris ≥ target</p>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong></p>
+                  <ul style={{ margin: "4px 0", paddingLeft: "20px" }}>
+                    <li>Mekanisk exit (hela positionen vid target), ELLER</li>
+                    <li>Ta 50% vid target + trailing stop på resterande</li>
+                  </ul>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#7e22ce" }}><strong>Filosofi:</strong> Här slutar analys – nu är det förvaltning</p>
+                </div>
+              </section>
+
+              {/* TIDSGRÄNSER */}
+              <section style={{ marginBottom: "32px" }}>
+                <h3 style={{ color: "#0f172a", marginBottom: "16px" }}>B) TIDSGRÄNSER (Time Stops)</h3>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#fefce8", borderLeft: "4px solid #fbbf24", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#92400e" }}>🟡 Nivå 1 – Early warning (3-5 dagar)</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Fråga:</strong> Har aktien gjort något som bekräftar idén?</p>
+                  <p style={{ margin: "4px 0" }}><strong>Bekräftelse:</strong> Högre high, stängning över entry, volymexpansion</p>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Markera som svag i journal om NEJ (men ingen exit än)</p>
+                </div>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#fff7ed", borderLeft: "4px solid #f97316", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#c2410c" }}>🟠 Nivå 2 – Operativ time stop (8-12 dagar)</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Villkor:</strong> Priset har INTE nått ≥ +1R eller skapat ny struktur</p>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Exit vid nästa rimliga tillfälle</p>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#c2410c" }}><strong>Filosofi:</strong> Momentumhypotesen är förbrukad, kapitalet kan arbeta bättre någon annanstans</p>
+                </div>
+
+                <div style={{ marginBottom: "20px", padding: "16px", background: "#fef2f2", borderLeft: "4px solid #ef4444", borderRadius: "4px" }}>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#991b1b" }}>🔴 Nivå 3 – Absolut maxgräns (15-20 dagar)</h4>
+                  <p style={{ margin: "4px 0" }}><strong>Åtgärd:</strong> Exit oavsett P/L</p>
+                  <p style={{ margin: "4px 0", fontStyle: "italic", color: "#991b1b" }}><strong>Filosofi:</strong> Disciplinregel – inte marknadsanalys</p>
+                </div>
+              </section>
+
+              {/* KÄRNREGEL */}
+              <section style={{ marginBottom: "32px", padding: "20px", background: "#fef2f2", border: "2px solid #ef4444", borderRadius: "8px" }}>
+                <h3 style={{ color: "#991b1b", marginBottom: "12px" }}>⚠️ KÄRNREGEL (aldrig bryt denna)</h3>
+                <p style={{ fontSize: "16px", fontWeight: "600", color: "#dc2626", marginBottom: "12px" }}>
+                  ❌ Flytta ALDRIG stop uppåt utan:
+                </p>
+                <ul style={{ marginLeft: "20px", color: "#991b1b" }}>
+                  <li>Ny struktur (högre swing-low bekräftad), ELLER</li>
+                  <li>Tydlig regel aktiverad (1R nådd → BE, target nådd → trailing)</li>
+                </ul>
+                <p style={{ marginTop: "12px", fontWeight: "600", color: "#991b1b" }}>
+                  <strong>Varför?</strong> Om du bryter denna regel kollapsar din expectancy, även bra analyser slutar fungera.
+                </p>
+              </section>
+
+              {/* Vad AI:n gör */}
+              <section style={{ marginBottom: "32px" }}>
+                <h3 style={{ color: "#0f172a", marginBottom: "16px" }}>Vad AI:n GÖR och INTE GÖR</h3>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div style={{ padding: "16px", background: "#f0fdf4", borderRadius: "8px", border: "1px solid #22c55e" }}>
+                    <h4 style={{ color: "#15803d", marginBottom: "12px" }}>✅ Vad AI:n GÖR:</h4>
+                    <ul style={{ paddingLeft: "20px", color: "#166534" }}>
+                      <li>Tillämpar regler mekaniskt</li>
+                      <li>Beräknar exakta nivåer</li>
+                      <li>Identifierar regelbrott</li>
+                      <li>Ger konkreta åtgärder</li>
+                    </ul>
+                  </div>
+
+                  <div style={{ padding: "16px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #ef4444" }}>
+                    <h4 style={{ color: "#991b1b", marginBottom: "12px" }}>❌ Vad AI:n INTE GÖR:</h4>
+                    <ul style={{ paddingLeft: "20px", color: "#991b1b" }}>
+                      <li>Förutsäga framtida prisrörelser</li>
+                      <li>Ge "känslobaserade" råd</li>
+                      <li>Avvika från regelverket</li>
+                      <li>Tolka makroekonomisk data</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+
+              {/* AI Configuration */}
+              <section style={{ padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                <h4 style={{ color: "#475569", marginBottom: "12px" }}>🤖 AI-Konfiguration</h4>
+                <ul style={{ paddingLeft: "20px", color: "#64748b" }}>
+                  <li><strong>Model:</strong> GPT-4o</li>
+                  <li><strong>Temperature:</strong> 0.3 (låg kreativitet, hög precision)</li>
+                  <li><strong>Max tokens:</strong> 1500</li>
+                  <li><strong>System role:</strong> Strikt regelbaserad rådgivare</li>
+                </ul>
+              </section>
             </div>
           </div>
         </div>

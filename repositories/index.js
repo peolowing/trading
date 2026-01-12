@@ -16,6 +16,7 @@ import * as marketdataRepo from './marketdata.repository.js';
 import * as screenerRepo from './screener.repository.js';
 import * as agentsRepo from './agents.repository.js';
 import * as aiAnalysisRepo from './ai-analysis.repository.js';
+import * as portfolioAiAnalysisRepo from './portfolio-ai-analysis.repository.js';
 
 export {
   portfolioRepo,
@@ -25,5 +26,6 @@ export {
   marketdataRepo,
   screenerRepo,
   agentsRepo,
-  aiAnalysisRepo
+  aiAnalysisRepo,
+  portfolioAiAnalysisRepo
 };

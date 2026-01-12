@@ -37,7 +37,7 @@ export async function findAllActive() {
   const { data, error } = await supabase
     .from('portfolio')
     .select('*')
-    .neq('exit_status', 'EXITED')
+    .or('exit_status.is.null,exit_status.neq.EXITED')
     .order('entry_date', { ascending: false });
 
   if (error) throw error;
@@ -95,6 +95,7 @@ export async function exists(ticker) {
     .from('portfolio')
     .select('ticker')
     .eq('ticker', ticker)
+    .or('exit_status.is.null,exit_status.neq.EXITED')
     .maybeSingle();
 
   return !error && data !== null;
