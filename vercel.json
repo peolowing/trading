@@ -38,11 +38,11 @@
     },
     {
       "source": "/api/portfolio/analyze/:ticker",
-      "destination": "/api/portfolio-analysis"
+      "destination": "/api/portfolio"
     },
     {
       "source": "/api/portfolio/ai-history/:ticker",
-      "destination": "/api/portfolio-analysis"
+      "destination": "/api/portfolio"
     },
     {
       "source": "/api/portfolio/:ticker",
