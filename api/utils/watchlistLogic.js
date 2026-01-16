@@ -399,7 +399,7 @@ export function updateWatchlistStatus(input) {
   // ─────────────────────────
   let timeWarning = null;
 
-  // FÖRBÄTTRING #9: Auto-remove efter 30 dagar
+  // FÖRBÄTTRING #9: Auto-remove efter 30 dagar (uppdaterad 2026-01-16)
   if (daysInWatchlist >= 30 && status !== "READY" && status !== "BREAKOUT_READY") {
     return {
       status: "EXPIRED",
