@@ -21,6 +21,25 @@ export default async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
 
+  // GET /api/quote/:ticker - Fetch single quote (used by PositionDetail)
+  if (method === 'GET' && pathname.includes('/quote/')) {
+    try {
+      const ticker = pathname.split('/').pop();
+      const quote = await yahooFinance.quote(ticker);
+
+      return res.json({
+        price: quote.regularMarketPrice,
+        previousClose: quote.regularMarketPreviousClose,
+        timestamp: quote.regularMarketTime,
+        change: quote.regularMarketChange,
+        changePercent: quote.regularMarketChangePercent
+      });
+    } catch (e) {
+      console.error("Get quote error:", e);
+      return res.status(500).json({ error: "Failed to fetch quote" });
+    }
+  }
+
   // GET /api/watchlist/live - Fetch live quotes
   if (method === 'GET' && pathname.includes('/live')) {
     try {

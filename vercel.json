@@ -13,6 +13,10 @@
       "destination": "/api/screener"
     },
     {
+      "source": "/api/quote/:ticker",
+      "destination": "/api/watchlist"
+    },
+    {
       "source": "/api/watchlist/live",
       "destination": "/api/watchlist"
     },
