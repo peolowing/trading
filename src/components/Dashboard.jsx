@@ -132,7 +132,13 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
     try {
       const res = await fetch("/api/portfolio");
       const data = await res.json();
-      setPortfolio(data.stocks || []);
+      const stocks = data.stocks || [];
+      setPortfolio(stocks);
+
+      // Fetch live prices for portfolio positions
+      if (stocks.length > 0) {
+        await fetchLiveData(stocks);
+      }
     } catch (e) {
       console.error("Portfolio error:", e);
     }
@@ -516,19 +522,24 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                     const rowBg = isExit ? "#fef2f2" : "transparent";
                     const rowBorder = isExit ? "2px solid #fca5a5" : "1px solid #f1f5f9";
 
-                    // PnL color coding
-                    const pnlPct = item.pnl_pct ?? 0;
+                    // Current price from live data (fallback to db price, then entry)
+                    const quote = liveData[item.ticker] || {};
+                    const currentPrice = quote.regularMarketPrice || item.current_price || item.entry_price;
+                    const priceChange = quote.regularMarketChange || 0;
+                    const priceChangePct = quote.regularMarketChangePercent || 0;
+
+                    // Calculate PnL dynamically based on live price
+                    const entryPrice = item.entry_price || 0;
+                    const pnlPct = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : 0;
                     const pnlColor = pnlPct >= 0 ? "#16a34a" : "#dc2626";
 
-                    // R-multiple color coding
-                    const rMultiple = item.r_multiple ?? 0;
+                    // Calculate R-multiple dynamically
+                    const rValue = item.initial_r || (entryPrice - (item.initial_stop || 0));
+                    const rMultiple = rValue > 0 ? (currentPrice - entryPrice) / rValue : 0;
                     let rColor = "#64748b";
                     if (rMultiple >= 2) rColor = "#16a34a"; // +2R = green
                     else if (rMultiple >= 1) rColor = "#3b82f6"; // +1R = blue
                     else if (rMultiple < 0) rColor = "#dc2626"; // negative = red
-
-                    // Current price (fallback to entry if no current)
-                    const currentPrice = item.current_price || item.entry_price;
 
                     return (
                       <tr
@@ -557,9 +568,19 @@ export default function Dashboard({ onSelectStock, onNavigate, onOpenPosition })
                           <strong style={{ color: "#0f172a" }}>{item.ticker}</strong>
                         </td>
 
-                        {/* Pris */}
+                        {/* Pris (live) */}
                         <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                          {currentPrice ? currentPrice.toFixed(2) : "—"}
+                          <div style={{ fontWeight: "600" }}>
+                            {currentPrice ? currentPrice.toFixed(2) : "—"}
+                          </div>
+                          {quote.regularMarketPrice && (
+                            <div style={{
+                              fontSize: "11px",
+                              color: priceChange >= 0 ? "#16a34a" : "#dc2626"
+                            }}>
+                              {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(2)} ({priceChangePct >= 0 ? "+" : ""}{priceChangePct.toFixed(1)}%)
+                            </div>
+                          )}
                         </td>
 
                         {/* Entry */}
