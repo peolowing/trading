@@ -399,8 +399,8 @@ export function updateWatchlistStatus(input) {
   // ─────────────────────────
   let timeWarning = null;
 
-  // FÖRBÄTTRING #9: Auto-remove efter 15 dagar
-  if (daysInWatchlist >= 15 && status !== "READY" && status !== "BREAKOUT_READY") {
+  // FÖRBÄTTRING #9: Auto-remove efter 30 dagar
+  if (daysInWatchlist >= 30 && status !== "READY" && status !== "BREAKOUT_READY") {
     return {
       status: "EXPIRED",
       action: "REMOVE_FROM_WATCHLIST",
@@ -414,8 +414,8 @@ export function updateWatchlistStatus(input) {
     };
   }
 
-  if (daysInWatchlist >= 10 && status !== "READY" && status !== "BREAKOUT_READY") {
-    timeWarning = "Lång väntan (" + daysInWatchlist + " dagar) – överväg att rensa (auto-remove vid 15 dagar)";
+  if (daysInWatchlist >= 20 && status !== "READY" && status !== "BREAKOUT_READY") {
+    timeWarning = "Lång väntan (" + daysInWatchlist + " dagar) – överväg att rensa (auto-remove vid 30 dagar)";
   }
 
   return {
